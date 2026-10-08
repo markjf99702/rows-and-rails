@@ -249,6 +249,45 @@ assert.equal(await page.locator('.checklist li.ok').count(), 10);
 assert.match(await text('#extra'), /weather station/);
 await tap('T-20');
 assert.match(await text('#info'), /screen’s GND lead/, 'the screen’s lead is in that hole');
+
+// ----- Level 4: Wi-Fi -----
+await go('final');
+assert.equal(await text('#next'), 'Level 4');
+await page.click('#next');
+assert.match(await text('#kicker'), /Level 4 · Step 1 of 6/i);
+assert.equal(await page.locator('.part-antenna').count(), 1);
+await page.click('#next');
+assert.equal(await text('#title'), 'Join your Wi-Fi');
+assert.equal(await page.locator('.wave').count(), 0, 'no radio waves before joining');
+await page.click('button:has-text("Connect")');
+assert.match(await text('#extra .verdict'), /Joining/);
+await page.waitForFunction(() => document.querySelector('#extra .verdict')?.textContent.includes('192.168.1.42'), null, { timeout: 4000 });
+assert.equal(await page.locator('.wave').count(), 3, 'radio waves once it’s on Wi-Fi');
+
+await go('page');
+await page.evaluate(() => { const s = document.querySelector('#temp'); s.value = '22'; s.dispatchEvent(new Event('input')); });
+assert.equal(await text('#pp-t'), '22.0 °C', 'the phone shows the reading');
+await page.evaluate(() => { const s = document.querySelector('#temp'); s.value = '24.5'; s.dispatchEvent(new Event('input')); });
+assert.equal(await text('#pp-t'), '24.5 °C', 'and follows it');
+
+await go('ping');
+assert.match(await text('#alerts'), /No alerts yet/);
+await page.evaluate(() => { const s = document.querySelector('#temp'); s.value = '27'; s.dispatchEvent(new Event('input')); });
+assert.match(await text('#alerts'), /Weather station[\s\S]*It's 27\.0 C/, 'one buzz when it passes 26');
+await page.evaluate(() => { const s = document.querySelector('#temp'); s.value = '27.5'; s.dispatchEvent(new Event('input')); });
+assert.equal(await page.locator('#alerts .note-card').count(), 1, 'no second buzz while it stays warm');
+await page.evaluate(() => { const s = document.querySelector('#temp'); for (const v of ['24', '27.2']) { s.value = v; s.dispatchEvent(new Event('input')); } });
+assert.equal(await page.locator('#alerts .note-card').count(), 2, 'it cooled off, so it can buzz again');
+
+await go('nowifi');
+const tabs4 = page.locator('.tab');
+for (let i = 0; i < await tabs4.count(); i++) {
+  await tabs4.nth(i).click();
+  assert.equal(await page.locator('#extra .verdict.bad').count(), 1, 'symptom ' + i);
+  await page.click('button:has-text("Show the fix")');
+  assert.equal(await page.locator('#pp-t').count(), 1, 'the page opens after the fix ' + i);
+}
+
 await go('build');
 
 // Fits a phone: nothing scrolls sideways.

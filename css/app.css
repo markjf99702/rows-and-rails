@@ -96,7 +96,7 @@ code { font: 500 .88em 'Plex Mono', ui-monospace, monospace; background: var(--c
 
 /* ----- Panel ----- */
 .panel { background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
-.panel-scroll { flex: 1; overflow-y: auto; padding: 1.1rem 1.4rem .5rem; overscroll-behavior: contain; }
+.panel-scroll { display: flex; flex-direction: column; flex: 1; overflow-y: auto; padding: 1.1rem 1.4rem .5rem; overscroll-behavior: contain; }
 .levels { display: flex; gap: .3rem; margin: 0 0 .7rem; flex-wrap: wrap; }
 .levels button {
   border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 8px;
@@ -147,6 +147,44 @@ h1 { margin: .15rem 0 .6rem; font-size: 1.55rem; line-height: 1.2; }
 .serial { height: 7.5rem; white-space: pre; }
 .oled-preview { background: #14325c; border-radius: 10px; padding: .55rem; max-width: 22rem; margin: 0 0 .9rem; }
 .oled-preview img { display: block; width: 100%; aspect-ratio: 2 / 1; background: #050607; border-radius: 3px; image-rendering: pixelated; }
+pre.snippet { margin: 0 0 .8rem; padding: .55rem .7rem; border-radius: 8px; background: var(--code-bg); color: var(--code-ink); font: 500 .76rem/1.45 'Plex Mono', ui-monospace, monospace; overflow-x: auto; }
+pre.snippet code { background: none; padding: 0; font-size: inherit; }
+.body ol.how { margin: 0 0 .8rem; padding-left: 1.3rem; }
+.body ol.how li { margin-bottom: .3rem; }
+.route { max-width: 100%; }
+.route .d-home { fill: none; stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.route .d-home-label { font: 600 10px 'Figtree', sans-serif; fill: var(--muted); }
+.route .d-box { fill: var(--chip); stroke: var(--ink); stroke-width: 1.2; }
+.route .d-end .d-box { fill: var(--accent); stroke: var(--accent); }
+.route .d-end .d-label, .route .d-end .d-sub { fill: var(--accent-ink); }
+.route .d-label { font: 700 12px 'Figtree', sans-serif; fill: var(--ink); text-anchor: middle; }
+.route .d-sub { font: 500 8.5px 'Plex Mono', monospace; fill: var(--muted); text-anchor: middle; }
+.route .d-arrow { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* the phone in level 4 goes straight under the title, so you see it react */
+body.phone-first .levels, body.phone-first .kicker, body.phone-first h1 { order: -2; }
+body.phone-first #extra { order: -1; margin-bottom: .6rem; }
+.levels, .kicker, h1, .body, .extra, .jd-foot { flex: none; }
+/* the phone in level 4 */
+.phone { width: 13.5rem; max-width: 100%; margin: .2rem auto 1rem; border-radius: 1.6rem; padding: .5rem; background: #15171b; box-shadow: 0 6px 18px var(--shadow); position: relative; }
+.phone-screen { border-radius: 1.2rem; overflow: hidden; background: #f4f6f8; color: #1d2126; height: 21rem; position: relative; display: flex; flex-direction: column; }
+.phone-bar { display: flex; justify-content: space-between; padding: .35rem .9rem .2rem; font: 600 .72rem 'Figtree', sans-serif; }
+.phone-url { margin: .2rem .6rem .5rem; padding: .3rem .6rem; border-radius: 99px; background: #e2e6ea; font: 500 .74rem 'Plex Mono', monospace; color: #3b4148; text-align: center; }
+.phone-page { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .3rem; font-family: system-ui, sans-serif; }
+.pp-t { font-size: 2.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pp-h { font-size: 1.05rem; color: #4b525a; }
+.phone-error { flex: 1; padding: 1.2rem 1rem; font-family: system-ui, sans-serif; color: #4b525a; font-size: .85rem; }
+.phone-error b { display: block; color: #1d2126; font-size: 1.05rem; margin-bottom: .4rem; }
+.phone-lock { flex: 1; background: linear-gradient(160deg, #2b3a55, #13324a 60%, #0d1b2a); color: #fff; display: flex; flex-direction: column; align-items: center; padding-top: .8rem; gap: .6rem; }
+.pl-time { font: 300 2.8rem 'Figtree', sans-serif; letter-spacing: -.02em; }
+.pl-list { width: 100%; padding: 0 .5rem; display: grid; gap: .4rem; overflow: hidden; }
+.pl-empty { margin: .4rem .6rem !important; font-size: .78rem; color: rgba(255,255,255,.75); text-align: center; }
+.note-card { background: rgba(255,255,255,.92); color: #1d2126; border-radius: .8rem; padding: .45rem .6rem; font: .78rem/1.3 system-ui, sans-serif; box-shadow: 0 2px 8px rgba(0,0,0,.25); animation: slide .45s cubic-bezier(.2,.9,.3,1.2) both; }
+.note-card .nc-app { display: flex; justify-content: space-between; font-size: .66rem; color: #5b636c; text-transform: uppercase; letter-spacing: .04em; }
+.note-card b { display: block; margin-top: .1rem; }
+.phone-banner { position: absolute; left: .4rem; right: .4rem; top: .4rem; z-index: 2; }
+@keyframes slide { from { transform: translateY(-120%); opacity: 0; } to { transform: none; opacity: 1; } }
+.wifi-state { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
 details.code { margin: 0 0 .9rem; border: 1px solid var(--line); border-radius: 10px; padding: .5rem .7rem; }
 details.code summary { cursor: pointer; font-weight: 600; }
 details.code pre { margin-top: .6rem; max-height: 22rem; }
@@ -277,6 +315,13 @@ svg[data-orient="v"] .smoke { animation-name: smoke-v; }
 .note.address { animation: blink 1.6s ease-in-out infinite; }
 .note.address.screen { animation-delay: .8s; }
 @keyframes blink { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+.ant-cable { fill: none; stroke: #8b9097; stroke-width: 1.1; stroke-linejoin: round; stroke-linecap: round; }
+.ant-socket { fill: #d4a94b; stroke: #8f6d24; stroke-width: .5; }
+.ant-body { fill: #c98a2b; stroke: #8a5a14; stroke-width: .5; }
+.ant-trace { fill: #e6b45a; }
+#board .ant-label { fill: #4a2f08; font: 700 3.2px 'Figtree', sans-serif; }
+.wave { fill: none; stroke: #36b8ff; stroke-width: 1.2; transform-box: fill-box; transform-origin: center; animation: wave 2.1s ease-out infinite; opacity: 0; pointer-events: none; }
+@keyframes wave { 0% { transform: scale(.15); opacity: .9; } 100% { transform: scale(1); opacity: 0; } }
 .bus-path { fill: none; stroke-width: 4.6; stroke-opacity: .35; stroke-linejoin: round; stroke-linecap: round; }
 .bus-dots { fill: none; stroke: #fff; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .bus-sda.bus-path { stroke: #36b8ff; } .bus-scl.bus-path { stroke: #ffd23f; }
@@ -319,6 +364,10 @@ svg[data-orient="v"] .smoke { animation-name: smoke-v; }
   h1 { font-size: 1.3rem; }
 }
 @media (max-width: 520px) {
+  .phone { width: 11.5rem; }
+  .phone-screen { height: 15.5rem; }
+  .pp-t { font-size: 2.1rem; }
+  .pl-time { font-size: 2.2rem; }
   body { font-size: 16px; }
   .top { padding-top: max(.45rem, env(safe-area-inset-top)); }
   .top .tag { display: none; }

@@ -1,7 +1,7 @@
 import { HOLES, hole, netOf, netHoles, describeNet, describeHole, cap, setSides, sided, partHoles, whatsIn, EXTENT } from './board.js';
 import { sensorStatus, screenStatus, analyze } from './circuit.js';
 import { BoardView, WIRE_CYCLE } from './render.js';
-import { STEPS, MISTAKES, LED_CIRCUIT, MISTAKES2, XIAO_CIRCUIT, xiao, bme, HOT, SKETCH, MISTAKES3, SCREEN_CIRCUIT, oled, EXTENT3, SKETCH3 } from './lessons.js';
+import { STEPS, MISTAKES, LED_CIRCUIT, MISTAKES2, XIAO_CIRCUIT, xiao, bme, HOT, MISTAKES3, SCREEN_CIRCUIT, oled, EXTENT3, TROUBLE, antenna, IP } from './lessons.js';
 
 const $ = s => document.querySelector(s);
 const svg = $('#board');
@@ -20,6 +20,9 @@ const state = {
   ch: { parts: loadCh(KEY2, [xiao, bme]), tool: 'look', pending: null },
   ch3: { parts: loadCh(KEY3, [xiao, bme, oled]), tool: 'look', pending: null },
   hum: 45,        // and the humidity, in level 3
+  wifi: 'on',     // level 4: 'off', 'joining' or 'on'
+  alerts: [],     // level 4: pushes that reached the phone, newest first
+  warned: false,  // the sketch's own flag: one buzz per warm spell
   high: true,     // D10, in the "LED on a pin" step
   temp: 22,       // what the sensor reads in "Run the code"
   serial: [],
@@ -65,6 +68,13 @@ function scene() {
   const s = step();
   const sc = { parts: s.parts || [], highlights: [...(s.highlights || [])], notes: (s.notes || []).map(n => ({ ...n, text: sided(n.text) })), marks: [], xray: state.xray ?? s.xray, bus: !!s.bus, high: level() >= 2 };
   if (s.mode === 'pin') sc.high = state.high;
+  if (level() === 4) {
+    const t = s.mode === 'trouble' && !state.fixed ? TROUBLE[state.tab] : null;
+    sc.wifi = t ? t.wifi : s.mode === 'join' ? state.wifi : s.mode === 'wifi' ? undefined : 'on';
+    sc.waves = sc.wifi === 'on';
+    if (t?.noAntenna) sc.parts = sc.parts.filter(p => p !== antenna);
+    if (s.mode === 'trouble') sc.parts = t?.noAntenna ? SCREEN_CIRCUIT : [...SCREEN_CIRCUIT, antenna];
+  }
   if (s.mode === 'run') sc.high = sensorOK() && state.temp > HOT;
   if (s.mode === 'mistakes') {
     const m = mistakes()[state.tab];
@@ -97,7 +107,7 @@ const lookMode = () => { const m = step().mode; return !['quiz', 'sandbox', 'cha
 
 function draw() {
   const sc = scene();
-  view.screen = level() === 3 ? screenFrame(sc.parts, sc.address) : null;
+  view.screen = level() >= 3 ? screenFrame(sc.parts, sc.address, sc.wifi) : null;
   const r = view.draw(sc);
   const xr = sc.xray === 'on';
   $('#xray').setAttribute('aria-pressed', String(xr));
@@ -109,6 +119,7 @@ function draw() {
 function render() {
   const s = step();
   document.body.dataset.mode = s.mode || 'look';
+  document.body.classList.toggle('phone-first', !!s.phone);
   const steps = inLevel(level());
   $('#kicker').textContent = `Level ${level()} · Step ${steps.indexOf(state.step) + 1} of ${steps.length}`;
   [...document.querySelectorAll('.levels button')].forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.level === level())));
@@ -137,6 +148,8 @@ function renderExtra(r) {
   else if (s.mode === 'pin') pinUI(ex);
   else if (s.mode === 'run') runUI(ex);
   else if (s.mode === 'challenge') challengeUI(ex, r);
+  else if (s.mode === 'join') joinUI(ex);
+  else if (s.mode === 'trouble') troubleUI(ex);
   else if (s.build) {
     const done = s.build === 4 && r.leds.some(l => l.state === 'lit');
     ex.append(h('p', { class: 'progress' }, ...[1, 2, 3, 4].map(n => h('span', { class: n <= s.build ? 'on' : '' }, ''))),
@@ -202,19 +215,21 @@ function verdict3(sc, r) {
 // What's on the screen: the sketch's own layout, drawn into 128 x 64 pixels that are either on or off.
 const pixels = document.createElement('canvas');
 pixels.width = 128; pixels.height = 64;
-function screenFrame(parts, address = 0x3C) {
+function screenFrame(parts, address = 0x3C, wifi) {
   const st = screenStatus(parts);
   if (!st || !st.ok || address !== 0x3C) return null;
+  if (wifi === 'off') return null; // not switched on yet
   const ctx = pixels.getContext('2d', { willReadFrequently: true });
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 128, 64);
   ctx.fillStyle = '#fff'; ctx.textBaseline = 'top';
   const small = (text, y) => { ctx.font = '500 9px "Plex Mono", monospace'; ctx.fillText(text, 0, y); };
   if (!sensorStatus(parts).ok) small('No BME280 found', 0);
+  else if (wifi === 'joining') small('Joining Wi-Fi...', 0);
   else {
     small('Temperature', 0);
     ctx.font = '500 27px "Plex Mono", monospace';
     ctx.fillText(state.temp.toFixed(1), 0, 17);
-    small(`Humidity ${Math.round(state.hum)}%`, 54);
+    small(wifi === 'on' ? IP : `Humidity ${Math.round(state.hum)}%`, 54);
   }
   const img = ctx.getImageData(0, 0, 128, 64), d = img.data;
   for (let i = 0; i < d.length; i += 4) {
@@ -240,11 +255,105 @@ function darkScreen() {
 
 // New pixels for the screen on the board and the big copy in the panel, without redrawing anything else.
 function refreshScreen() {
-  if (level() !== 3) return;
-  const url = screenFrame(view.scene.parts, view.scene.address);
+  if (level() < 3) return;
+  const url = screenFrame(view.scene.parts, view.scene.address, view.scene.wifi);
   view.setScreen(url);
   const big = $('#oled');
   if (big) big.src = url || darkScreen();
+}
+
+// ----- Level 4: Wi-Fi and your phone -----
+
+let joining = null;
+function joinUI(ex) {
+  const say = { off: 'Not on Wi-Fi yet.', joining: 'Joining Wi-Fi...', on: `On Wi-Fi. The router gave the XIAO the address ${IP}.` }[state.wifi];
+  ex.append(h('div', { class: 'wifi-state' },
+    h('button', {
+      class: 'btn', disabled: state.wifi === 'joining' ? '' : false,
+      onclick: () => {
+        if (state.wifi === 'on') { state.wifi = 'off'; render(); return; }
+        state.wifi = 'joining'; render();
+        clearTimeout(joining);
+        joining = setTimeout(() => { state.wifi = 'on'; if (step().mode === 'join') render(); }, 1800);
+      },
+    }, state.wifi === 'on' ? 'Disconnect' : 'Connect')),
+  h('p', { class: 'verdict ' + (state.wifi === 'on' ? 'good' : '') }, say));
+}
+
+// One buzz each time it warms past the line, like the sketch's "warned" flag.
+function checkAlert() {
+  if (level() !== 4 || step().mode !== 'run' || !sensorOK()) return;
+  if (state.temp > HOT && !state.warned) {
+    state.warned = true;
+    state.alerts.unshift({ text: `It's ${state.temp.toFixed(1)} C`, at: Date.now(), fresh: true });
+    state.alerts = state.alerts.slice(0, 4);
+    showBanner();
+  }
+  if (state.temp < HOT - 1) state.warned = false;
+}
+
+let bannerTimer = null;
+function showBanner() {
+  if (step().phone === 'ping') return refreshPhone(true); // on the lock screen it joins the list instead
+  const b = $('.phone-banner');
+  if (!b) return;
+  b.replaceChildren(noteCard(state.alerts[0]));
+  b.hidden = false;
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => { b.hidden = true; }, 3500);
+}
+
+const ago = at => { const m = Math.round((Date.now() - at) / 60000); return m < 1 ? 'now' : `${m}m ago`; };
+function noteCard(a) {
+  return h('div', { class: 'note-card' }, h('div', { class: 'nc-app' }, h('span', {}, 'ntfy'), h('span', {}, ago(a.at))),
+    h('b', {}, 'Weather station'), a.text);
+}
+
+// The phone: a browser on weather.local ('page'), its lock screen with alerts ('ping'), or what goes wrong.
+function phone(kind, opts = {}) {
+  const clock = new Date().toTimeString().slice(0, 5);
+  const screen = h('div', { class: 'phone-screen' }, h('div', { class: 'phone-bar' }, h('span', {}, clock), h('span', {}, 'Wi-Fi')));
+  if (kind === 'ping') {
+    screen.classList.add('lock');
+    screen.querySelector('.phone-bar').style.color = '#fff';
+    screen.style.background = '#13324a';
+    screen.append(h('div', { class: 'phone-lock' }, h('div', { class: 'pl-time' }, clock), h('div', { class: 'pl-list', id: 'alerts', 'data-quiet': opts.quiet ? '' : false })));
+  } else if (kind === 'error' || kind === 'nolocal') {
+    screen.append(h('div', { class: 'phone-url' }, 'weather.local'),
+      h('div', { class: 'phone-error' }, h('b', {}, kind === 'nolocal' ? 'Can’t find weather.local' : 'This site can’t be reached'),
+        kind === 'nolocal' ? 'The phone doesn’t know which device weather.local is.' : 'weather.local took too long to respond.'));
+  } else {
+    screen.append(h('div', { class: 'phone-url' }, opts.url || 'weather.local'),
+      h('div', { class: 'phone-page' }, h('div', { class: 'pp-t', id: 'pp-t' }), h('div', { class: 'pp-h', id: 'pp-h' })));
+  }
+  const banner = h('div', { class: 'phone-banner', hidden: '' });
+  const el = h('div', { class: 'phone', role: 'img', 'aria-label': 'Your phone' }, screen, banner);
+  queueMicrotask(() => refreshPhone(true));
+  return el;
+}
+
+function refreshPhone(all = false) {
+  const t = $('#pp-t'), hum = $('#pp-h');
+  if (t) t.textContent = sensorOK() ? `${state.temp.toFixed(1)} °C` : '--';
+  if (hum) hum.textContent = `Humidity ${Math.round(state.hum)}%`;
+  const list = $('#alerts');
+  if (list && list.hasAttribute('data-quiet')) list.replaceChildren(h('p', { class: 'pl-empty' }, 'Nothing. The alerts are going to a topic nobody’s listening to.'));
+  else if (list && all) list.replaceChildren(...(state.alerts.length ? state.alerts.map(noteCard) : [h('p', { class: 'pl-empty' }, `No alerts yet. Breathe on the sensor to go past ${HOT} °C.`)]));
+}
+
+function troubleUI(ex) {
+  const t = TROUBLE[state.tab];
+  const tabs = h('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Symptoms' });
+  TROUBLE.forEach((tt, i) => tabs.append(h('button', {
+    role: 'tab', 'aria-selected': String(i === state.tab), class: 'tab',
+    onclick: () => { state.tab = i; state.fixed = false; render(); },
+  }, tt.label)));
+  ex.append(tabs,
+    h('p', { class: 'verdict ' + (state.fixed ? 'good' : 'bad') }, state.fixed ? (t.fixUrl ? `http://${t.fixUrl} opens the page.` : 'Connected: the page opens and alerts arrive.') : t.say),
+    h('p', {}, t.text),
+    h('button', { class: 'btn', onclick: () => { state.fixed = !state.fixed; render(); } }, state.fixed ? 'Show the problem again' : 'Show the fix'),
+    h('p', { class: 'serial-label' }, 'Your phone'),
+    state.fixed ? phone('page', { url: t.fixUrl || 'weather.local' }) : t.phone === 'quiet' ? phone('ping', { quiet: true }) : phone(t.phone));
 }
 
 // ----- Level 2: the pin, the code, the challenge -----
@@ -261,13 +370,16 @@ function runUI(ex) {
   const ok = sensorOK();
   const slider = h('input', { type: 'range', id: 'temp', min: '15', max: '35', step: '0.1', value: String(state.temp), 'aria-label': 'Temperature' });
   const readout = h('span', { class: 'temp' }, `${state.temp.toFixed(1)} °C`);
-  slider.addEventListener('input', () => { state.temp = +slider.value; clearInterval(breath); readout.textContent = `${state.temp.toFixed(1)} °C`; draw(); refreshScreen(); });
+  slider.addEventListener('input', () => { state.temp = +slider.value; clearInterval(breath); readout.textContent = `${state.temp.toFixed(1)} °C`; draw(); refreshScreen(); checkAlert(); refreshPhone(); });
+  if (level() === 4) ex.append(phone(step().phone));
   ex.append(
     h('label', { class: 'slider', for: 'temp' }, h('span', {}, 'Temperature'), readout),
     slider,
     h('div', { class: 'row' }, h('button', { class: 'btn', onclick: breathe }, 'Breathe on it')),
     h('p', { class: 'verdict ' + (state.temp > HOT ? 'good' : '') }, state.temp > HOT ? `Above ${HOT} °C: D10 is HIGH and the LED is on.` : `Below ${HOT} °C: D10 is LOW and the LED is off.`),
-    ...(level() === 3
+    ...(level() === 4
+      ? []
+      : level() === 3
       ? [h('p', { class: 'serial-label' }, 'The screen'), h('div', { class: 'oled-preview' }, h('img', { id: 'oled', alt: 'What the screen shows: the temperature in large digits, with the humidity underneath' }))]
       : [h('p', { class: 'serial-label' }, 'Serial Monitor'), h('pre', { class: 'serial', id: 'serial', 'aria-live': 'off' }, ok ? state.serial.join('\n') : 'Could not find a BME280 sensor')]));
   refreshScreen();
@@ -285,7 +397,7 @@ function breathe() {
     state.temp = t < 1.5 ? start + (peak - start) * (t / 1.5) : Math.max(start, peak - (peak - start) * ((t - 1.5) / 6));
     state.hum = hum0 + 38 * (state.temp - start) / Math.max(0.1, peak - start); // breath is damp too
     if (t > 7.5) { state.temp = start; state.hum = hum0; clearInterval(breath); }
-    if (step().mode !== 'run') { clearInterval(breath); return; }
+    if (step().mode !== 'run') { clearInterval(breath); state.temp = start; state.hum = hum0; return; } // left the step mid-breath
     const s = $('#temp'), out = $('.temp');
     if (s) s.value = String(state.temp);
     if (out) out.textContent = `${state.temp.toFixed(1)} °C`;
@@ -296,13 +408,15 @@ function breathe() {
     }
     draw();
     refreshScreen();
+    checkAlert();
+    refreshPhone();
   }, 100);
 }
 
 // The sketch prints once a second, like the real thing.
 function tick() {
   if (step().mode !== 'run' || !sensorOK()) return;
-  if (level() === 3) { refreshScreen(); return; }
+  if (level() >= 3) { refreshScreen(); refreshPhone(); return; }
   const t = state.temp + (Math.random() - 0.5) * 0.08;
   state.serial.push(`Temperature: ${t.toFixed(1)} C`);
   if (state.serial.length > 40) state.serial.shift();
@@ -320,7 +434,8 @@ function copyCode(btn) {
     getSelection().addRange(range);
     btn.textContent = 'Selected: copy it from here';
   };
-  try { navigator.clipboard.writeText(SKETCH).then(done, fallback); } catch { fallback(); }
+  const code = btn.parentElement.querySelector('code').textContent;
+  try { navigator.clipboard.writeText(code).then(done, fallback); } catch { fallback(); }
 }
 
 function challengeUI(ex, r) {
@@ -607,8 +722,9 @@ function go(i, push = true) {
   state.ch.pending = null;
   if (step().mode === 'quiz') newQuiz();
   if (step().mode === 'pin') state.high = true;
+  if (step().mode === 'join') { clearTimeout(joining); state.wifi = 'off'; }
   if (push) history.replaceState(null, '', '#' + step().id);
-  view.setExtent(level() === 3 ? EXTENT3 : EXTENT);
+  view.setExtent(level() >= 3 ? EXTENT3 : EXTENT);
   if (fitBoard()) applyFocus(false);
   render();
   applyFocus();

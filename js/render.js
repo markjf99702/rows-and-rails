@@ -227,6 +227,7 @@ export class BoardView {
     this.result = r;
     this.svg.classList.toggle('xray-on', scene.xray === 'on');
     this.svg.classList.toggle('xray-peek', scene.xray === 'peek');
+    this.waves = !!scene.waves;
 
     this.gHl.replaceChildren();
     for (const h of scene.highlights || []) this.highlight(h.net, h.tone);
@@ -357,6 +358,7 @@ export class BoardView {
     if (p.type === 'xiao') return this.drawXiao(p, g);
     if (p.type === 'sensor') return this.drawSensor(p, g);
     if (p.type === 'oled') return this.drawOled(p, g);
+    if (p.type === 'antenna') return this.drawAntenna(p, g);
     const A = hole(p.a), Bh = hole(p.b);
     const [ax, ay] = this.pt(A.x, A.y), [bx, by] = this.pt(Bh.x, Bh.y);
     const mx = (ax + bx) / 2, my = (ay + by) / 2;
@@ -487,6 +489,21 @@ export class BoardView {
       el('circle', { cx: bx, cy: by, r: P * 0.12, class: 'pin' }, g);
       el('circle', { cx: ax, cy: ay, r: P * 0.26, class: 'xiao-pad' }, g);
       this.text(h.x, h.y - 0.8, q.name, { class: 'xiao-pin' }, g);
+    }
+  }
+
+  // The XIAO ESP32C3's little flat antenna, on a thin cable from its socket, with radio waves when it's on Wi-Fi.
+  drawAntenna(p, g) {
+    const pts = [[6.75, 8.75], [8.1, 8.5], [12.4, 8.5], [12.4, -7.15]].map(([x, y]) => this.pt(x, y).join(',')).join(' ');
+    el('polyline', { points: pts, class: 'ant-cable' }, g);
+    const [sx, sy] = this.pt(6.75, 8.75);
+    el('circle', { cx: sx, cy: sy, r: P * 0.32, class: 'ant-socket' }, g);
+    this.rect(6.1, -9.7, 13.5, -7.1, { rx: P * 0.25, class: 'ant-body' }, g);
+    for (const x of [7.2, 8.6, 10]) this.rect(x, -9.2, x + 0.9, -7.6, { class: 'ant-trace' }, g);
+    this.text(11.8, -8.4, 'antenna', { class: 'ant-label' }, g);
+    if (this.waves) {
+      const [cx, cy] = this.pt(9.8, -8.4);
+      for (let i = 0; i < 3; i++) el('circle', { cx, cy, r: P * 4.2, class: 'wave', style: `animation-delay:${i * 0.7}s` }, g);
     }
   }
 

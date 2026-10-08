@@ -37,6 +37,7 @@ for (const [name, hash, act] of [
   ['inside', 'rows', async p => { await p.click('#xray'); await tap(p, 'c17'); }],
   ['loop', 'loop'],
   ['xiao', 'xled'],
+  ['wifi', 'ping', async p => { await p.evaluate(() => { const s = document.querySelector('#temp'); s.value = '27.1'; s.dispatchEvent(new Event('input')); }); }],
   ['screen', 'show', async p => { await p.evaluate(() => { const s = document.querySelector('#temp'); s.value = '27.4'; s.dispatchEvent(new Event('input')); }); }],
 ]) {
   const page = await open({ width: 390, height: 844 }, 2, hash);

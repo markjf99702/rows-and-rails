@@ -445,3 +445,210 @@ export const MISTAKES3 = [
   },
 ];
 for (const m of MISTAKES3) if (!m.fix) m.fix = SCREEN_CIRCUIT;
+
+// ----- Level 4: Wi-Fi, a page on your phone, and a buzz when it's hot -----
+
+export const antenna = { type: 'antenna', fixed: true };
+export const WIFI_CIRCUIT = [...SCREEN_CIRCUIT, antenna];
+export const IP = '192.168.1.42';
+
+export const SKETCH4 = `#include <WiFi.h>
+#include <WebServer.h>
+#include <ESPmDNS.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include <Wire.h>
+#include <Adafruit_BME280.h>
+#include <Adafruit_SSD1306.h>
+
+const char* WIFI_NAME = "your Wi-Fi name";       // a 2.4 GHz network
+const char* WIFI_PASSWORD = "your Wi-Fi password";
+const char* TOPIC = "pick-a-hard-to-guess-name";   // your ntfy topic
+
+Adafruit_BME280 bme;
+Adafruit_SSD1306 screen(128, 64, &Wire, -1);
+WebServer server(80);
+const int LED_PIN = D10;
+const float HOT = ${HOT}.0;     // degrees C
+float t, h;
+bool warned = false;
+
+// The page your phone opens. It asks for fresh numbers every 2 seconds.
+const char PAGE[] = R"page(<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<title>Weather station</title>
+<body style="font: 22px sans-serif; text-align: center">
+<h1 id="t">--</h1><p id="h"></p>
+<script>
+async function update() {
+  const r = await (await fetch('/data')).json();
+  document.getElementById('t').textContent = r.t.toFixed(1) + ' °C';
+  document.getElementById('h').textContent = 'Humidity ' + r.h + '%';
+}
+update();
+setInterval(update, 2000);
+</script>)page";
+
+void sendPage() { server.send(200, "text/html", PAGE); }
+void sendData() {
+  server.send(200, "application/json",
+    "{\\"t\\":" + String(t, 1) + ",\\"h\\":" + String(h, 0) + "}");
+}
+
+// A push to your phone through ntfy.sh.
+void notify(String message) {
+  WiFiClientSecure tls;
+  tls.setInsecure();   // skips checking ntfy's certificate
+  HTTPClient http;
+  http.begin(tls, String("https://ntfy.sh/") + TOPIC);
+  http.addHeader("Title", "Weather station");
+  http.POST(message);
+  http.end();
+}
+
+void setup() {
+  pinMode(LED_PIN, OUTPUT);
+  Wire.begin();
+  screen.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  screen.setTextColor(SSD1306_WHITE);
+  screen.clearDisplay();
+  screen.print("Joining Wi-Fi...");
+  screen.display();
+  bme.begin(0x76);
+
+  WiFi.begin(WIFI_NAME, WIFI_PASSWORD);
+  while (WiFi.status() != WL_CONNECTED) delay(250);
+  MDNS.begin("weather");          // http://weather.local
+  server.on("/", sendPage);
+  server.on("/data", sendData);
+  server.begin();
+}
+
+void loop() {
+  server.handleClient();          // answer the phone, if it's asking
+  static unsigned long last = 0;
+  if (millis() - last < 2000) return;
+  last = millis();
+
+  t = bme.readTemperature();
+  h = bme.readHumidity();
+  digitalWrite(LED_PIN, t > HOT ? HIGH : LOW);
+  if (t > HOT && !warned) {
+    notify("It's " + String(t, 1) + " C");
+    warned = true;
+  }
+  if (t < HOT - 1) warned = false;  // a degree of slack, so it doesn't buzz on every wobble
+
+  screen.clearDisplay();
+  screen.setTextSize(1);
+  screen.setCursor(0, 0);
+  screen.print("Temperature");
+  screen.setTextSize(3);
+  screen.setCursor(0, 16);
+  screen.print(t, 1);
+  screen.setTextSize(1);
+  screen.setCursor(0, 54);
+  screen.print(WiFi.localIP());   // the address to type if weather.local won't open
+  screen.display();
+}`;
+
+// Where the readings travel: the XIAO, your router, and either your phone (same Wi-Fi) or the internet.
+const box = (x, label, sub, cls = '') => `<g class="${cls}"><rect x="${x}" y="26" width="64" height="40" rx="8" class="d-box"/>
+  <text x="${x + 32}" y="45" class="d-label">${label}</text><text x="${x + 32}" y="58" class="d-sub">${sub}</text></g>`;
+const arrow = (x1, x2) => `<path d="M${x1} 46H${x2}" class="d-arrow"/><path d="M${x2 - 6} 41l6 5-6 5" class="d-arrow"/>`;
+const routeLocal = `<svg class="art route" viewBox="0 0 300 92" role="img" aria-label="The XIAO sends the page to your Wi-Fi router, which passes it to your phone. Everything stays in your home.">
+  <rect x="2" y="8" width="296" height="80" rx="12" class="d-home"/><text x="14" y="22" class="d-home-label">your home Wi-Fi</text>
+  ${box(14, 'XIAO', 'weather.local')}${arrow(80, 116)}${box(118, 'router', '192.168.1.1')}${arrow(184, 220)}${box(222, 'phone', 'browser')}
+</svg>`;
+const routeOut = `<svg class="art route" viewBox="0 0 380 92" role="img" aria-label="For an alert, the XIAO sends a message through your router and the internet to ntfy.sh, which pushes it to the ntfy app on your phone, wherever it is.">
+  <rect x="2" y="8" width="150" height="80" rx="12" class="d-home"/><text x="14" y="22" class="d-home-label">home</text>
+  ${box(10, 'XIAO', 'POST')}${arrow(76, 84)}${box(86, 'router', '')}${arrow(152, 158)}${box(160, 'internet', '')}${arrow(226, 232)}${box(234, 'ntfy.sh', 'your topic')}${arrow(300, 306)}${box(308, 'phone', 'ntfy app', 'd-end')}
+</svg>`;
+
+STEPS.push(
+  {
+    id: 'wifi', level: 4, title: 'Wi-Fi is built in', xray: 'off', focus: SCREEN_AREA, mode: 'wifi',
+    parts: WIFI_CIRCUIT,
+    body: `<p>The ESP32 chip on the XIAO has a Wi-Fi radio inside, so this level needs no new wires. Everything happens in the code.</p>
+      <ul>
+        <li><b>Clip on the antenna.</b> The XIAO ESP32C3 comes with a little flat antenna on a thin cable. Press its round plug onto the tiny socket on the board. Without it, Wi-Fi barely reaches across a room.</li>
+        <li><b>2.4 GHz only.</b> The ESP32C3 can't see 5 GHz networks. Most home routers broadcast both.</li>
+      </ul>
+      <p>From here the readings can go two ways: to a web page you open on your phone at home, and as a push alert that reaches your phone anywhere.</p>`,
+  },
+  {
+    id: 'join', level: 4, title: 'Join your Wi-Fi', xray: 'off', focus: SCREEN_AREA, mode: 'join',
+    parts: WIFI_CIRCUIT,
+    body: `<p>Two lines join your network:</p>
+      <pre class="snippet"><code>WiFi.begin("your Wi-Fi name", "your password");
+while (WiFi.status() != WL_CONNECTED) delay(250);</code></pre>
+      <p>Your router then hands the XIAO an <b>IP address</b>, its number on your home network, like <code>${IP}</code>. The screen shows it, which is handy later.</p>`,
+  },
+  {
+    id: 'page', level: 4, title: 'A page on your phone', xray: 'off', focus: SCREEN_AREA, mode: 'run', bus: true, phone: 'page',
+    parts: WIFI_CIRCUIT,
+    body: `<p>The XIAO can run a tiny <b>web server</b>. Your phone, on the same Wi-Fi, opens <code>http://weather.local</code> and gets a page with the latest reading. The page asks again every 2 seconds.</p>
+      ${routeLocal}
+      <p>It all stays inside your home: no account, no cloud. Drag the temperature or breathe on the sensor and watch the phone.</p>`,
+  },
+  {
+    id: 'ping', level: 4, title: 'A buzz when it’s hot', xray: 'off', focus: SCREEN_AREA, mode: 'run', bus: true, phone: 'ping',
+    parts: WIFI_CIRCUIT,
+    body: `<p>A page only helps when you look at it. For an alert, the XIAO sends a message to <b>ntfy.sh</b>, a free push service, and the <b>ntfy</b> app on your phone shows it, even when you're out.</p>
+      ${routeOut}
+      <ol class="how">
+        <li>Install the ntfy app and subscribe to a topic name you make up.</li>
+        <li>Put the same name in the sketch.</li>
+        <li>Above ${HOT} °C the XIAO posts a message once, then waits for it to cool off a degree before it can buzz again.</li>
+      </ol>
+      <p class="hint">There's no sign-up, so the topic name works like a password: anyone who knows it can read your alerts. Make it long and hard to guess.</p>`,
+  },
+  {
+    id: 'station', level: 4, title: 'The whole sketch', xray: 'off', focus: SCREEN_AREA, mode: 'run', bus: true, phone: 'page',
+    parts: WIFI_CIRCUIT,
+    body: `<p>Here it is all together: the sensor, the screen, the LED, the web page and the alert.</p>
+      <details class="code"><summary>The code</summary><pre><code>${esc(SKETCH4)}</code></pre>
+        <button class="btn quiet copy" type="button">Copy the code</button>
+        <p class="hint">Put in your Wi-Fi name, password and ntfy topic before uploading. Everything it needs comes with the esp32 boards, plus the two Adafruit libraries from level 3. If you share the code, take your password out first.</p>
+      </details>`,
+  },
+  {
+    id: 'nowifi', level: 4, title: 'Can’t connect?', xray: 'off', focus: SCREEN_AREA, mode: 'trouble',
+    body: `<p>Wi-Fi problems don't show on the breadboard, so look at the screen and the phone. Pick a symptom, then show the fix.</p>`,
+  },
+);
+
+// wifi: what the XIAO manages ('joining' means stuck trying); phone: what your phone shows.
+export const TROUBLE = [
+  {
+    id: '5ghz', label: '5 GHz network', wifi: 'joining', phone: 'error',
+    say: 'The screen is stuck on “Joining Wi-Fi...”',
+    text: `The ESP32C3 only speaks 2.4 GHz, so it can't see a 5 GHz network at all. Many routers have both under one name, or offer a separate 2.4 GHz network in their settings. A guest network is often 2.4 GHz too.`,
+  },
+  {
+    id: 'password', label: 'Password typo', wifi: 'joining', phone: 'error',
+    say: 'The screen is stuck on “Joining Wi-Fi...”',
+    text: `The name and password must match exactly, capitals and spaces included. Copy them from your router's label or settings rather than typing them from memory.`,
+  },
+  {
+    id: 'antenna', label: 'No antenna', wifi: 'joining', phone: 'error', noAntenna: true,
+    say: 'The screen is stuck on “Joining Wi-Fi...”, or connects and drops',
+    text: `Without its antenna the XIAO ESP32C3 can barely hear the router. Press the antenna's round plug onto the socket until it clicks.`,
+  },
+  {
+    id: 'other-network', label: 'Phone on another network', wifi: 'on', phone: 'error',
+    say: 'The screen shows its address, but the phone can’t reach weather.local',
+    text: `The page only works on the same Wi-Fi as the XIAO. A phone on mobile data, or on a guest network that keeps devices apart, can't see it. Join the same network on your phone.`,
+  },
+  {
+    id: 'dot-local', label: '“weather.local” won’t open', wifi: 'on', phone: 'nolocal',
+    say: 'The phone says it can’t find weather.local',
+    text: `Some phones, especially older Android ones, don't look up .local names. Type the address from the bottom of the screen instead: http://${IP}.`,
+    fixUrl: IP,
+  },
+  {
+    id: 'no-alert', label: 'No alerts', wifi: 'on', phone: 'quiet',
+    say: 'The page works, but no alert ever arrives',
+    text: `The topic in the ntfy app has to match the sketch exactly, capitals included, and the app needs permission to show notifications. Check both, then breathe on the sensor.`,
+  },
+];
