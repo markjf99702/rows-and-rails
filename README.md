@@ -21,7 +21,9 @@
 - **Why won't it light?** Six common mistakes, each with a "Show the fix" button.
 - **Find a connected hole.** Six rounds: one hole glows and you tap another on the same clip.
 - **Build your own.** Place wires, resistors and LEDs by tapping two holes. It tells you whether the LED lights, and why not if it doesn't. Your build is kept in this browser.
-- **Fits the screen.** The board lies on its side on a wide screen and stands up on a phone.
+- **Fits the screen.** The board lies on its side on a wide screen and stands up on a phone, where the words follow it: the rails are "top and bottom" one way and "left and right" the other.
+- **Zoom.** On a phone each step opens zoomed in on the part that matters. Pinch, drag, or use the + and − buttons; **Whole board** zooms back out.
+- **LED legs are labelled.** The LED leans to one side so both holes stay in sight, with a red + on the long leg and a blue − on the short one. Tap a hole to hear what's plugged into it.
 - No account and no server. It works offline and installs to a phone's home screen.
 
 ## Running it

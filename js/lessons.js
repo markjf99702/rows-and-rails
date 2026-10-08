@@ -1,5 +1,8 @@
 // The walk-through: what the board shows at each step and what the panel says.
 
+// focus: the part of the board a step zooms to on a small screen, as [x0, y0, x1, y1] in board coordinates.
+const NEAR_BATTERY = [-1.6, -4.9, 16, 9.2];
+
 const battery = { type: 'battery' };
 const resistor = { type: 'resistor', a: 'T+12', b: 'a12' };
 const led = { type: 'led', a: 'c12', b: 'c13' };
@@ -51,7 +54,7 @@ export const STEPS = [
       <p class="hint">Use <b>See inside</b> above the board to switch this view on and off at any step.</p>`,
   },
   {
-    id: 'rows', title: 'Rows of five', xray: 'peek',
+    id: 'rows', title: 'Rows of five', xray: 'peek', focus: [5, -1.6, 18, 15.4],
     highlights: [{ net: '12ae', tone: 'a' }, { net: '12fj', tone: 'b' }],
     notes: [{ at: [11, 8.5], text: 'not joined across the gap' }],
     body: `<p>Every numbered row has two short clips. Holes <b>a to e</b> share one, and holes <b>f to j</b> share another.</p>
@@ -59,7 +62,7 @@ export const STEPS = [
       <p class="hint">Try it: tap a few holes and watch which ones light up with them.</p>`,
   },
   {
-    id: 'gap', title: 'The gap in the middle', xray: 'peek',
+    id: 'gap', title: 'The gap in the middle', xray: 'peek', focus: [-1.6, 1.5, 13, 15.5],
     parts: [{ type: 'chip', col: 5, pins: 8 }],
     highlights: [5, 6, 7, 8].flatMap((n, i) => [{ net: n + 'ae', tone: i % 2 ? 'b' : 'a' }, { net: n + 'fj', tone: i % 2 ? 'a' : 'b' }]),
     notes: [{ at: [6.5, 12], text: '8 legs, 8 separate clips' }],
@@ -70,17 +73,17 @@ export const STEPS = [
   {
     id: 'rails', title: 'The power rails', xray: 'on',
     highlights: [{ net: 'T+', tone: 'plus' }, { net: 'T-', tone: 'minus' }, { net: 'B-', tone: 'minus' }, { net: 'B+', tone: 'plus' }],
-    notes: [{ at: [15, 8.5], text: 'top and bottom rails are separate' }],
+    notes: [{ at: [15, 8.5], text: '{T} and {B} rails are separate' }],
     body: `<p>The long strips along both edges are the <b>power rails</b>. Each one runs the whole length of the board.</p>
       <p>Plug your power into one pair: <span class="plus">+ next to the red line</span>, <span class="minus">− next to the blue line</span>. Then every row on the board is one short wire away from power.</p>
       <ul>
-        <li>The top pair and the bottom pair aren't joined. To use both, add two wires: + to + and − to −.</li>
+        <li>The {T} pair and the {B} pair aren't joined. To use both, add two wires: + to + and − to −.</li>
         <li>Not every board puts red and blue in the same order. Go by the lines printed on yours.</li>
         <li>On some longer boards the red and blue lines break halfway. That means the rail does too, and needs a short wire across the break.</li>
       </ul>`,
   },
   {
-    id: 'power', title: 'Build it: power', xray: 'peek', build: 1,
+    id: 'power', title: 'Build it: power', xray: 'peek', build: 1, focus: NEAR_BATTERY,
     parts: [battery],
     highlights: [{ net: 'T+', tone: 'plus' }, { net: 'T-', tone: 'minus' }],
     body: `<p>Now let's light an LED. You'll need:</p>
@@ -93,7 +96,7 @@ export const STEPS = [
       <p>First, plug the battery's <span class="plus">red lead into the + rail</span> and its <span class="minus">black lead into the − rail</span>. Every hole on those two rails is now live.</p>`,
   },
   {
-    id: 'resistor', title: 'Build it: the resistor', xray: 'peek', build: 2,
+    id: 'resistor', title: 'Build it: the resistor', xray: 'peek', build: 2, focus: NEAR_BATTERY,
     parts: [battery, resistor],
     highlights: [{ net: '12ae', tone: 'a' }],
     body: `<p>Put one leg of the resistor in the <b>+ rail</b> and the other in <b>row 12</b>. Resistors work either way round.</p>
@@ -101,7 +104,7 @@ export const STEPS = [
       ${art.resistor}`,
   },
   {
-    id: 'led', title: 'Build it: the LED', xray: 'peek', build: 3,
+    id: 'led', title: 'Build it: the LED', xray: 'peek', build: 3, focus: NEAR_BATTERY,
     parts: [battery, resistor, led],
     highlights: [{ net: '13ae', tone: 'b' }],
     notes: [{ at: [12.5, 8.5], text: 'row 13 goes nowhere yet' }],
@@ -110,7 +113,7 @@ export const STEPS = [
       <p>It doesn't light yet. Row 13 isn't connected to anything else, so current has no way back to the battery.</p>`,
   },
   {
-    id: 'loop', title: 'Build it: close the loop', xray: 'peek', build: 4,
+    id: 'loop', title: 'Build it: close the loop', xray: 'peek', build: 4, focus: NEAR_BATTERY,
     parts: LED_CIRCUIT,
     body: `<p>One wire from row 13 to the <b>− rail</b> closes the loop, and the LED lights.</p>
       <p>The moving dots show the path the current takes: out of the battery's +, along the rail, through the resistor, along row 12's clip, through the LED, along row 13's clip, down the wire, and back to −.</p>
@@ -125,8 +128,9 @@ export const STEPS = [
     body: `<p>One hole is glowing. Tap any <b>other</b> hole that's connected to it. Six rounds.</p>`,
   },
   {
-    id: 'build', title: 'Build your own', xray: 'off', mode: 'sandbox',
-    body: `<p>The battery is already on the top rails. Choose a part above the board, then tap two holes to place it. For an LED, tap the long leg's hole (+) first.</p>`,
+    id: 'build', title: 'Build your own', xray: 'off', mode: 'sandbox', focus: NEAR_BATTERY,
+    body: `<p>The battery is already on the {T} rails. Choose a part above the board, then tap two holes to place it. For an LED, tap the long leg's hole (+) first.</p>
+      <p class="hint">Pinch or use the + and − buttons to zoom, and drag to move around the board.</p>`,
   },
 ];
 
@@ -134,18 +138,18 @@ const swap = (i, p) => LED_CIRCUIT.map((q, k) => (k === i ? p : q));
 
 export const MISTAKES = [
   {
-    id: 'backwards', label: 'Backwards LED',
+    id: 'backwards', label: 'Backwards LED', focus: NEAR_BATTERY,
     parts: swap(2, { type: 'led', a: 'c13', b: 'c12' }),
     text: `The long leg is in row 13 and the short leg in row 12, so the LED faces the wrong way. Current can only go in at the long leg. Turn it around.`,
   },
   {
-    id: 'same-row', label: 'Both legs in one row',
+    id: 'same-row', label: 'Both legs in one row', focus: NEAR_BATTERY,
     parts: swap(2, { type: 'led', a: 'b12', b: 'd12' }),
     highlights: [{ net: '12ae', tone: 'bad' }],
     text: `Both legs are in row 12, a to e, so the clip underneath joins them. Current has nowhere to go but around the LED. Put the two legs in different rows.`,
   },
   {
-    id: 'gap', label: 'Wrong side of the gap',
+    id: 'gap', label: 'Wrong side of the gap', focus: [-1.6, -4.9, 17, 12],
     parts: swap(3, { type: 'wire', a: 'f13', b: 'T-14', color: 'black' }),
     highlights: [{ net: '13ae', tone: 'a' }, { net: '13fj', tone: 'b' }],
     text: `The wire is in row 13, but on the other side of the middle gap. Holes f to j aren't joined to a to e, so the loop is open. Move the wire into any hole from a13 to e13.`,
@@ -155,16 +159,16 @@ export const MISTAKES = [
     parts: swap(3, { type: 'wire', a: 'a13', b: 'B-14', color: 'black' }),
     highlights: [{ net: 'B-', tone: 'bad' }, { net: 'T-', tone: 'minus' }],
     fix: [...swap(3, { type: 'wire', a: 'a13', b: 'B-14', color: 'black' }), { type: 'wire', a: 'T+30', b: 'B+30', color: 'red' }, { type: 'wire', a: 'T-29', b: 'B-29', color: 'black' }],
-    fixText: `Two wires join the top rails to the bottom ones. Now both pairs are live.`,
-    text: `The wire goes to the bottom − rail, but the battery is on the top rails, and they aren't joined. Use the top − rail, or join the rails with two wires.`,
+    fixText: `Two wires join the {T} rails to the {B} ones. Now both pairs are live.`,
+    text: `The wire goes to the {B} − rail, but the battery is on the {T} rails, and they aren't joined. Use the {T} − rail, or join the rails with two wires.`,
   },
   {
-    id: 'no-resistor', label: 'No resistor',
+    id: 'no-resistor', label: 'No resistor', focus: NEAR_BATTERY,
     parts: swap(1, { type: 'wire', a: 'T+12', b: 'a12', color: 'red' }),
     text: `With nothing to hold the current back, the LED takes far more than it can handle. It flashes bright once and never lights again. Always put a resistor in the loop with an LED.`,
   },
   {
-    id: 'short', label: 'Short circuit',
+    id: 'short', label: 'Short circuit', focus: [-1.6, -4.9, 22, 9.2],
     parts: [...LED_CIRCUIT, { type: 'wire', a: 'T+20', b: 'T-20', color: 'yellow' }],
     highlights: [{ net: 'T+', tone: 'plus' }, { net: 'T-', tone: 'minus' }],
     text: `A wire straight from + to − gives the current a path with nothing on it, so nearly all of it goes that way. The LED goes dark and the battery and wire get hot. Never join the rails directly.`,

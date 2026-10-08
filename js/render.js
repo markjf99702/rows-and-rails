@@ -3,7 +3,7 @@
 // in board coordinates and mapped through pt(), so the same scene works either way.
 
 import { HOLES, hole, netHoles, RAILS, RAIL_X, COLS, LETTERS, ROW_Y, EXTENT, holeNear } from './board.js';
-import { analyze, flowPoints } from './circuit.js';
+import { analyze } from './circuit.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const P = 10; // SVG units per hole spacing
@@ -24,16 +24,111 @@ export class BoardView {
     this.orient = null;
     this.scene = { parts: [] };
     this.shown = new Set();
+    this.vb = null;      // what part of the board is showing, in SVG units
+    this.focus = null;   // the board rectangle [x0, y0, x1, y1] to show, or null for all of it
   }
 
   pt(x, y) { return this.orient === 'h' ? [x * P, y * P] : [y * P, x * P]; }
 
   setOrient(o) {
-    if (o === this.orient) return;
+    if (o === this.orient) return false;
     this.orient = o;
     this.build();
     this.shown = new Set(); // let parts drop in again, it's a fresh drawing
     this.draw(this.scene);
+    return true;
+  }
+
+  // ----- Zoom -----
+  // The view box always matches the shape of the box the board sits in, so panning and the
+  // limits work on what's actually on screen.
+
+  box() { const r = this.svg.getBoundingClientRect(); return { w: r.width || 1, h: r.height || 1 }; }
+
+  svgRect([x0, y0, x1, y1]) {
+    const [a, b] = this.pt(x0, y0), [c, d] = this.pt(x1, y1);
+    return { x: Math.min(a, c), y: Math.min(b, d), w: Math.abs(c - a), h: Math.abs(d - b) };
+  }
+
+  shape(r) {
+    const { w, h } = this.box(), ar = w / h;
+    const out = { ...r };
+    if (out.w / out.h < ar) { const nw = out.h * ar; out.x -= (nw - out.w) / 2; out.w = nw; }
+    else { const nh = out.w / ar; out.y -= (nh - out.h) / 2; out.h = nh; }
+    return this.clamp(out);
+  }
+
+  clamp(r) {
+    const full = this.svgRect([EXTENT.x0, EXTENT.y0, EXTENT.x1, EXTENT.y1]);
+    const ar = r.w / r.h;
+    const maxW = Math.max(full.w, full.h * ar), minW = maxW / 6;
+    let w = Math.min(maxW, Math.max(minW, r.w)), h = w / ar;
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    let x = cx - w / 2, y = cy - h / 2;
+    x = w >= full.w ? full.x + (full.w - w) / 2 : Math.min(Math.max(x, full.x), full.x + full.w - w);
+    y = h >= full.h ? full.y + (full.h - h) / 2 : Math.min(Math.max(y, full.y), full.y + full.h - h);
+    return { x, y, w, h };
+  }
+
+  // Screen pixels per hole spacing when the whole board shows.
+  fullPitch() {
+    const full = this.svgRect([EXTENT.x0, EXTENT.y0, EXTENT.x1, EXTENT.y1]), { w, h } = this.box();
+    return Math.min(w / full.w, h / full.h) * P;
+  }
+
+  zoomed() {
+    if (!this.vb) return false;
+    const all = this.shape(this.svgRect([EXTENT.x0, EXTENT.y0, EXTENT.x1, EXTENT.y1]));
+    return this.vb.w < all.w * 0.98;
+  }
+
+  setFocus(rect, animate = true) {
+    this.focus = rect;
+    this.show(this.shape(this.svgRect(rect || [EXTENT.x0, EXTENT.y0, EXTENT.x1, EXTENT.y1])), animate);
+  }
+
+  // After a resize: keep the same middle and the same zoom, in the new shape.
+  refit() {
+    if (!this.vb) return this.setFocus(this.focus, false);
+    this.show(this.shape(this.target || this.vb), false); // aim for where a zoom was heading
+  }
+
+  show(vb, animate) {
+    cancelAnimationFrame(this.anim);
+    const from = this.vb;
+    this.target = vb;
+    const set = r => { this.vb = r; this.svg.setAttribute('viewBox', `${r.x} ${r.y} ${r.w} ${r.h}`); this.onview?.(); };
+    this.busy = false;
+    if (!animate || !from || matchMedia('(prefers-reduced-motion: reduce)').matches) return set(vb);
+    this.busy = true;
+    const t0 = performance.now(), D = 380;
+    const tick = now => {
+      const t = Math.min(1, (now - t0) / D), e = 1 - (1 - t) ** 3;
+      set({ x: from.x + (vb.x - from.x) * e, y: from.y + (vb.y - from.y) * e, w: from.w + (vb.w - from.w) * e, h: from.h + (vb.h - from.h) * e });
+      if (t < 1) this.anim = requestAnimationFrame(tick);
+      else this.busy = false;
+    };
+    this.anim = requestAnimationFrame(tick);
+  }
+
+  // Zoom by f (above 1 is closer) around a point on screen.
+  zoomAt(f, clientX, clientY) {
+    if (!this.vb) return;
+    const r = this.svg.getBoundingClientRect();
+    const fx = clientX == null ? 0.5 : (clientX - r.left) / r.width, fy = clientY == null ? 0.5 : (clientY - r.top) / r.height;
+    const w = this.vb.w / f, h = this.vb.h / f;
+    const x = this.vb.x + (this.vb.w - w) * fx, y = this.vb.y + (this.vb.h - h) * fy;
+    cancelAnimationFrame(this.anim);
+    this.show(this.clamp({ x, y, w, h }), false);
+  }
+
+  // Move the view by a distance in screen pixels.
+  panBy(dx, dy) {
+    if (!this.vb) return;
+    const r = this.svg.getBoundingClientRect();
+    const k = this.vb.w / r.width;
+    cancelAnimationFrame(this.anim);
+    this.show(this.clamp({ ...this.vb, x: this.vb.x - dx * k, y: this.vb.y - dy * k }), false);
   }
 
   // Which way gives bigger holes in a box this size?
@@ -62,8 +157,8 @@ export class BoardView {
   build() {
     const svg = this.svg;
     svg.replaceChildren();
-    const [vx0, vy0] = this.pt(EXTENT.x0, EXTENT.y0), [vx1, vy1] = this.pt(EXTENT.x1, EXTENT.y1);
-    svg.setAttribute('viewBox', `${vx0} ${vy0} ${vx1 - vx0} ${vy1 - vy0}`);
+    this.vb = null;
+    this.setFocus(this.focus, false);
     svg.dataset.orient = this.orient;
 
     const defs = el('defs', {}, svg);
@@ -140,7 +235,7 @@ export class BoardView {
 
     this.gFlow.replaceChildren();
     if (scene.flow !== false && r.flow && r.leds.some(l => l.state === 'lit')) {
-      const pts = flowPoints(r.flow).map(([x, y]) => this.pt(x, y).join(',')).join(' ');
+      const pts = this.flowPath(r.flow).map(p => p.join(',')).join(' ');
       el('polyline', { points: pts, class: 'flow-path' }, this.gFlow);
       el('polyline', { points: pts, class: 'flow-dots' }, this.gFlow);
     }
@@ -149,6 +244,30 @@ export class BoardView {
     for (const m of scene.marks || []) this.mark(m.hole, m.kind);
     for (const n of scene.notes || []) this.note(n.at[0], n.at[1], n.text, n.tone);
     return r;
+  }
+
+  // Where current runs for one loop, on screen: along the clips between parts, and up through each LED's dome.
+  flowPath(flow) {
+    const pts = [];
+    const at = id => { const h = hole(id); pts.push(this.pt(h.x, h.y)); };
+    at('BAT+');
+    for (const s of flow) {
+      at(s.from);
+      if (s.edge.kind === 'led') pts.push(this.domeAt(s.edge.a, s.edge.b).d);
+      at(s.to);
+    }
+    at('BAT-');
+    return pts.filter((p, i) => i === 0 || p[0] !== pts[i - 1][0] || p[1] !== pts[i - 1][1]);
+  }
+
+  // An LED leans to one side so both of its holes stay in sight.
+  domeAt(aId, bId) {
+    const A = hole(aId), B = hole(bId);
+    const a = this.pt(A.x, A.y), b = this.pt(B.x, B.y);
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const u = [(b[0] - a[0]) / len, (b[1] - a[1]) / len], n = [u[1], -u[0]];
+    const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    return { a, b, u, n, len, d: [m[0] + n[0] * P * 0.95, m[1] + n[1] * P * 0.95] };
   }
 
   highlight(net, tone = 'a') {
@@ -224,20 +343,25 @@ export class BoardView {
     } else if (p.type === 'led') {
       const state = ledState || 'off';
       g.classList.add('led-' + state);
-      if (state === 'lit') el('circle', { cx: mx, cy: my, r: P * 2.4, fill: 'url(#glow)', class: 'led-glow' }, g);
-      el('line', { x1: ax, y1: ay, x2: mx, y2: my, class: 'leg' }, g);
-      el('line', { x1: bx, y1: by, x2: mx, y2: my, class: 'leg' }, g);
-      for (const [x, y] of [[ax, ay], [bx, by]]) el('circle', { cx: x, cy: y, r: P * 0.12, class: 'pin' }, g);
-      const R = P * 0.66, fx = R * 0.8, hy = Math.sqrt(R * R - fx * fx);
-      const dome = el('g', { transform: `translate(${mx} ${my}) rotate(${ang})` }, g);
+      const { a, b, u, n, d } = this.domeAt(p.a, p.b);
+      if (state === 'lit') el('circle', { cx: d[0], cy: d[1], r: P * 2.4, fill: 'url(#glow)', class: 'led-glow' }, g);
+      for (const q of [a, b]) el('line', { x1: q[0], y1: q[1], x2: d[0], y2: d[1], class: 'leg' }, g);
+      el('circle', { cx: a[0], cy: a[1], r: P * 0.17, class: 'pin leg-plus' }, g);
+      el('circle', { cx: b[0], cy: b[1], r: P * 0.17, class: 'pin leg-minus' }, g);
+      const R = P * 0.62, fx = R * 0.8, hy = Math.sqrt(R * R - fx * fx);
+      const ang = Math.atan2(u[1], u[0]) * 180 / Math.PI;
+      const dome = el('g', { transform: `translate(${d[0]} ${d[1]}) rotate(${ang})` }, g);
       el('path', { d: `M${fx} ${-hy}A${R} ${R} 0 1 0 ${fx} ${hy}Z`, class: 'led-dome' }, dome);
       el('circle', { cx: -R * 0.3, cy: -R * 0.3, r: R * 0.28, class: 'led-shine' }, dome);
-      // A small + beside the long leg.
-      const ux = len ? (ax - bx) / len : 0, uy = len ? (ay - by) / len : 0;
-      const t = el('text', { x: ax + ux * P * 0.62 - uy * P * 0.55, y: ay + uy * P * 0.62 + ux * P * 0.55, class: 'led-plus' }, g);
-      t.textContent = '+';
+      // + and − tags on the far side of each leg's hole, so you can see which leg is where.
+      for (const [q, sign, cls] of [[a, '+', 'plus'], [b, '−', 'minus']]) {
+        const cx = q[0] - n[0] * P * 0.68, cy = q[1] - n[1] * P * 0.68;
+        el('circle', { cx, cy, r: P * 0.3, class: 'leg-tag ' + cls }, g);
+        const t = el('text', { x: cx, y: cy, class: 'leg-sign' }, g);
+        t.textContent = sign;
+      }
       if (state === 'burned') {
-        for (let i = 0; i < 3; i++) el('circle', { cx: mx + (i - 1) * P * 0.35, cy: my, r: P * 0.32, class: 'smoke', style: `animation-delay:${i * 0.45}s` }, g);
+        for (let i = 0; i < 3; i++) el('circle', { cx: d[0] + (i - 1) * P * 0.35, cy: d[1], r: P * 0.32, class: 'smoke', style: `animation-delay:${i * 0.45}s` }, g);
       }
     }
   }

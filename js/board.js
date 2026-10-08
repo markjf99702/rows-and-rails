@@ -60,10 +60,19 @@ export function holeNear(x, y, reach = 0.75) {
   return best;
 }
 
-const RAIL_NAMES = { 'T+': 'the top + rail', 'T-': 'the top − rail', 'B+': 'the bottom + rail', 'B-': 'the bottom − rail' };
+// The rails are at the top and bottom when the board lies on its side, and on the left and right
+// when it stands up on a phone. Everything that names them asks here.
+let SIDES = { T: 'top', B: 'bottom' };
+export function setSides(orient) { SIDES = orient === 'v' ? { T: 'left', B: 'right' } : { T: 'top', B: 'bottom' }; }
+export const side = k => SIDES[k];
+// "{T}" and "{B}" in lesson text become the right words for the way the board is showing.
+export const sided = s => s.replace(/\{T\}/g, SIDES.T).replace(/\{B\}/g, SIDES.B).replace(/\{Tc\}/g, cap(SIDES.T)).replace(/\{Bc\}/g, cap(SIDES.B));
+
+const railName = net => `the ${SIDES[net[0]]} ${net[1] === '+' ? '+' : '−'} rail`;
+const isRail = net => /^[TB][+-]$/.test(net);
 
 export function describeNet(net) {
-  if (RAIL_NAMES[net]) return RAIL_NAMES[net];
+  if (isRail(net)) return railName(net);
   if (net === 'bat+' || net === 'bat-') return 'the battery';
   const m = /^(\d+)(ae|fj)$/.exec(net);
   return `row ${m[1]}, holes ${m[2] === 'ae' ? 'a–e' : 'f–j'}`;
@@ -71,8 +80,8 @@ export function describeNet(net) {
 
 export function describeHole(id) {
   const h = hole(id);
-  if (h.kind === 'rail') return `${RAIL_NAMES[h.net].slice(4)}, hole ${RAIL_X.indexOf(h.x) + 1}`;
+  if (h.kind === 'rail') return `${railName(h.net).slice(4)}, hole ${RAIL_X.indexOf(h.x) + 1}`;
   return id;
 }
 
-export const cap = s => s[0].toUpperCase() + s.slice(1);
+export function cap(s) { return s[0].toUpperCase() + s.slice(1); }

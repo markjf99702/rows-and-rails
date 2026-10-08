@@ -34,6 +34,7 @@ await page.goto(base);
 await page.evaluate(() => document.fonts.ready);
 
 const tap = async id => {
+  await page.waitForFunction(() => !rowsAndRails.view.busy); // let a zoom finish first
   const [x, y] = await page.evaluate(id => rowsAndRails.where(id), id);
   await page.mouse.click(x, y);
 };
@@ -47,7 +48,38 @@ await tap('c12');
 assert.match(await text('#info'), /c12 is joined to a12, b12, d12, e12/);
 assert.equal(await page.locator('.hl .ring').count(), 5);
 await tap('T-8');
-assert.match(await text('#info'), /all 25 holes on the top − rail/);
+assert.match(await text('#info'), /all 25 holes on the left − rail/);
+
+// Standing up on a phone, the rails are on the left and right.
+await go('rails');
+assert.match(await text('#body'), /The left pair and the right pair aren't joined/);
+assert.equal(await page.locator('.note text', { hasText: 'left and right rails are separate' }).count(), 1);
+await tap('T-8');
+assert.match(await text('#info'), /left − rail/);
+await go('meet');
+
+// The building steps zoom in on a phone, and the buttons zoom out to the whole board and back.
+await go('loop');
+await page.waitForTimeout(500);
+assert.equal(await page.evaluate(() => rowsAndRails.view.zoomed()), true, 'zoomed in on the circuit');
+assert.equal(await page.locator('.leg-tag.plus').count(), 1, 'the LED shows which leg is +');
+assert.equal(await page.locator('.leg-tag.minus').count(), 1);
+await page.click('#zfit');
+await page.waitForTimeout(500);
+assert.equal(await page.evaluate(() => rowsAndRails.view.zoomed()), false);
+assert.equal(await page.locator('#zfit').isHidden(), true);
+await page.click('#zin');
+assert.equal(await page.evaluate(() => rowsAndRails.view.zoomed()), true);
+await go('meet');
+await page.waitForTimeout(500);
+assert.equal(await page.evaluate(() => rowsAndRails.view.zoomed()), false, 'the first step shows the whole board');
+
+// Tapping a hole with an LED leg in it says which leg.
+await go('led');
+await page.waitForTimeout(500);
+await tap('c12');
+assert.match(await text('#info'), /long leg \(\+\)/);
+await go('meet');
 
 // See inside.
 await page.click('#xray');
@@ -75,16 +107,18 @@ for (let i = 0; i < await tabs.count(); i++) {
 await go('quiz');
 const target = await page.evaluate(() => rowsAndRails.state.quiz.target);
 const partner = await page.evaluate(async t => {
-  const { netHoles, netOf } = await import('./js/board.js');
-  return netHoles(netOf(t)).find(h => h.id !== t).id;
+  const { netHoles, netOf, hole } = await import('./js/board.js');
+  const T = hole(t); // the nearest one, so it's on screen when the board is zoomed in
+  return netHoles(netOf(t)).filter(h => h.id !== t).sort((p, q) => Math.hypot(p.x - T.x, p.y - T.y) - Math.hypot(q.x - T.x, q.y - T.y))[0].id;
 }, target);
 await tap(partner);
 assert.equal(await text('.verdict'), 'Yes, connected.');
 await page.click('button:has-text("Next round")');
 const t2 = await page.evaluate(() => rowsAndRails.state.quiz.target);
 const stranger = await page.evaluate(async t => {
-  const { HOLES, netOf } = await import('./js/board.js');
-  return HOLES.find(h => netOf(h.id) !== netOf(t)).id;
+  const { HOLES, netOf, hole } = await import('./js/board.js');
+  const T = hole(t);
+  return HOLES.filter(h => netOf(h.id) !== netOf(t)).sort((p, q) => Math.hypot(p.x - T.x, p.y - T.y) - Math.hypot(q.x - T.x, q.y - T.y))[0].id;
 }, t2);
 await tap(stranger);
 assert.equal(await text('.verdict'), 'Not connected.');
@@ -133,6 +167,9 @@ assert.deepEqual((await cdp.send('Page.getInstallabilityErrors')).installability
 // Wide screens lay the board on its side.
 await page.setViewportSize({ width: 1280, height: 800 });
 await page.waitForFunction(() => rowsAndRails.view.orient === 'h');
+await go('rails');
+assert.match(await text('#body'), /The top pair and the bottom pair aren't joined/);
+await go('build');
 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
 
 // Works offline once it has been opened.

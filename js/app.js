@@ -1,4 +1,4 @@
-import { HOLES, hole, netOf, netHoles, describeNet, describeHole, cap } from './board.js';
+import { HOLES, hole, netOf, netHoles, describeNet, describeHole, cap, setSides, sided } from './board.js';
 import { BoardView, WIRE_CYCLE } from './render.js';
 import { STEPS, MISTAKES, LED_CIRCUIT } from './lessons.js';
 
@@ -36,7 +36,7 @@ const step = () => STEPS[state.step];
 
 function scene() {
   const s = step();
-  const sc = { parts: s.parts || [], highlights: [...(s.highlights || [])], notes: s.notes || [], marks: [], xray: state.xray ?? s.xray };
+  const sc = { parts: s.parts || [], highlights: [...(s.highlights || [])], notes: (s.notes || []).map(n => ({ ...n, text: sided(n.text) })), marks: [], xray: state.xray ?? s.xray };
   if (s.mode === 'mistakes') {
     const m = MISTAKES[state.tab];
     sc.parts = state.fixed ? m.fix : m.parts;
@@ -80,7 +80,7 @@ function render() {
   document.body.dataset.mode = s.mode || 'look';
   $('#kicker').textContent = `Step ${state.step + 1} of ${STEPS.length}`;
   $('#title').textContent = s.title;
-  $('#body').innerHTML = s.body;
+  $('#body').innerHTML = sided(s.body);
   $('#back').disabled = state.step === 0;
   $('#next').textContent = state.step === STEPS.length - 1 ? 'Restart' : 'Next';
   [...$('#dots').children].forEach((li, i) => li.firstChild.setAttribute('aria-current', i === state.step ? 'step' : 'false'));
@@ -127,12 +127,12 @@ function mistakesUI(ex, r) {
   const tabs = h('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Mistakes' });
   MISTAKES.forEach((mm, i) => tabs.append(h('button', {
     role: 'tab', 'aria-selected': String(i === state.tab), class: 'tab',
-    onclick: () => { state.tab = i; state.fixed = false; state.inspect = null; render(); },
+    onclick: () => { state.tab = i; state.fixed = false; state.inspect = null; render(); applyFocus(); },
   }, mm.label)));
   const [tone, say] = verdict(r);
   ex.append(tabs,
     h('p', { class: 'verdict ' + tone }, say),
-    h('p', {}, state.fixed ? (m.fixText || 'Fixed. Compare it with the broken one to spot the difference.') : m.text),
+    h('p', {}, sided(state.fixed ? (m.fixText || 'Fixed. Compare it with the broken one to spot the difference.') : m.text)),
     h('button', { class: 'btn', onclick: () => { state.fixed = !state.fixed; render(); } }, state.fixed ? 'Show the mistake again' : 'Show the fix'));
 }
 
@@ -155,7 +155,7 @@ function quizUI(ex) {
   if (q.done) {
     ex.append(h('p', { class: 'verdict good' }, `${q.score} of 6 right.`),
       h('p', {}, q.score >= 5 ? 'You can read a breadboard.' : 'Try the "Rows of five" and "Power rails" steps again, then have another go.'),
-      h('button', { class: 'btn', onclick: () => { newQuiz(); render(); } }, 'Play again'));
+      h('button', { class: 'btn', onclick: () => { newQuiz(); render(); applyFocus(); } }, 'Play again'));
     return;
   }
   if (!q.answer) {
@@ -178,6 +178,7 @@ function nextRound() {
   if (q.round >= 6) q.done = true;
   else q.target = pick(q.round);
   render();
+  applyFocus();
 }
 
 function answer(id) {
@@ -278,12 +279,21 @@ function setInfo() {
   const s = step();
   if (state.inspect && lookMode()) {
     const id = state.inspect, net = netOf(id), others = netHoles(net).filter(x => x.id !== id);
-    info(others.length > 6
+    info((others.length > 6
       ? `${cap(describeHole(id))}: joined to all ${others.length + 1} holes on ${describeNet(net)}.`
-      : `${id} is joined to ${others.map(x => x.id).join(', ')}: ${describeNet(net)}.`);
+      : `${id} is joined to ${others.map(x => x.id).join(', ')}: ${describeNet(net)}.`) + legIn(id));
   } else if (s.mode === 'quiz') info('Tap a hole connected to the glowing one.');
   else if (s.mode === 'sandbox') info({ look: 'Tap any hole to see what it’s joined to.', wire: 'Wire: tap two holes.', resistor: 'Resistor: tap two holes.', led: 'LED: tap the long leg’s hole (+), then the short leg’s.', remove: 'Tap a hole to take out what’s in it.' }[state.sb.tool]);
   else info('Tap any hole to see what it’s joined to.');
+}
+
+// What's plugged into a hole, if anything: " It holds the LED's long leg (+)."
+function legIn(id) {
+  const p = view.scene.parts.find(q => q.a === id || q.b === id);
+  if (!p) return '';
+  const what = p.type === 'led' ? (p.a === id ? 'the LED’s long leg (+)' : 'the LED’s short leg (−)')
+    : p.type === 'resistor' ? 'a leg of the resistor' : 'one end of a wire';
+  return ` It holds ${what}.`;
 }
 
 function inspect(id) {
@@ -292,11 +302,49 @@ function inspect(id) {
   setInfo();
 }
 
-let down = null;
-svg.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY }; });
-svg.addEventListener('pointerup', e => {
-  if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 12) { down = null; return; }
-  down = null;
+// One finger taps a hole, or drags the board around when it's zoomed in. Two fingers pinch to zoom.
+const touches = new Map();
+let moved = false;
+svg.addEventListener('pointerdown', e => {
+  svg.setPointerCapture?.(e.pointerId);
+  touches.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY });
+  if (touches.size === 1) moved = false;
+  else moved = true; // a pinch is never a tap
+});
+svg.addEventListener('pointermove', e => {
+  const t = touches.get(e.pointerId);
+  if (!t) {
+    if (e.pointerType !== 'mouse') return;
+    const hh = view.holeAt(e, 0.6);
+    view.hover(hh?.id);
+    svg.style.cursor = hh ? 'pointer' : '';
+    return;
+  }
+  if (touches.size >= 2) {
+    const [a, b] = [...touches.values()];
+    const d0 = Math.hypot(a.x - b.x, a.y - b.y), m0 = [(a.x + b.x) / 2, (a.y + b.y) / 2];
+    t.x = e.clientX; t.y = e.clientY;
+    const d1 = Math.hypot(a.x - b.x, a.y - b.y), m1 = [(a.x + b.x) / 2, (a.y + b.y) / 2];
+    if (d0 > 0) view.zoomAt(d1 / d0, m1[0], m1[1]);
+    view.panBy(m1[0] - m0[0], m1[1] - m0[1]);
+    return;
+  }
+  const dx = e.clientX - t.x, dy = e.clientY - t.y;
+  t.x = e.clientX; t.y = e.clientY;
+  if (!moved && Math.hypot(e.clientX - t.x0, e.clientY - t.y0) > 10) moved = true;
+  if (moved && view.zoomed()) view.panBy(dx, dy);
+});
+const lift = e => {
+  if (!touches.delete(e.pointerId)) return;
+  if (e.type === 'pointercancel') moved = true;
+  if (!touches.size && !moved) tap(e);
+};
+svg.addEventListener('pointerup', lift);
+svg.addEventListener('pointercancel', lift);
+svg.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') view.hover(null); });
+svg.addEventListener('wheel', e => { e.preventDefault(); view.zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY); }, { passive: false });
+
+function tap(e) {
   const hh = view.holeAt(e, 0.8);
   const m = step().mode;
   if (!hh) {
@@ -306,14 +354,28 @@ svg.addEventListener('pointerup', e => {
   if (m === 'quiz') answer(hh.id);
   else if (m === 'sandbox') sandboxTap(hh.id);
   else inspect(hh.id);
-});
-svg.addEventListener('pointermove', e => {
-  if (e.pointerType !== 'mouse') return;
-  const hh = view.holeAt(e, 0.6);
-  view.hover(hh?.id);
-  svg.style.cursor = hh ? 'pointer' : '';
-});
-svg.addEventListener('pointerleave', () => view.hover(null));
+}
+
+// ----- Zoom -----
+
+// Small screens open each step zoomed in on the part that matters; big ones show the whole board.
+const SMALL = 22; // screen pixels between holes, below which tapping gets fiddly
+function focusFor() {
+  if (view.fullPitch() >= SMALL) return null;
+  const s = step();
+  if (s.mode === 'mistakes') return MISTAKES[state.tab].focus || null;
+  if (s.mode === 'quiz' && !state.quiz.done) {
+    const t = hole(state.quiz.target);
+    return [t.x - 7, t.y < 8.5 ? -1.6 : 7.8, t.x + 7, t.y < 8.5 ? 9.2 : 18.6];
+  }
+  return s.focus || null;
+}
+function applyFocus(animate = true) { view.setFocus(focusFor(), animate); }
+
+view.onview = () => { $('#zfit').hidden = !view.zoomed(); };
+$('#zin').addEventListener('click', () => view.zoomAt(1.5));
+$('#zout').addEventListener('click', () => view.zoomAt(1 / 1.5));
+$('#zfit').addEventListener('click', () => view.setFocus(null));
 
 // ----- Steps -----
 
@@ -326,6 +388,7 @@ function go(i, push = true) {
   if (step().mode === 'quiz') newQuiz();
   if (push) history.replaceState(null, '', '#' + step().id);
   render();
+  applyFocus();
   $('.panel-scroll').scrollTop = 0;
 }
 
@@ -350,14 +413,21 @@ window.addEventListener('hashchange', () => {
 });
 
 const wrap = $('.board-wrap');
+function fitBoard() {
+  const { width, height } = wrap.getBoundingClientRect();
+  const o = BoardView.fit(width || 800, height || 500);
+  setSides(o);
+  return view.setOrient(o);
+}
 new ResizeObserver(() => {
   const { width, height } = wrap.getBoundingClientRect();
-  if (width && height) view.setOrient(BoardView.fit(width, height));
+  if (!width || !height) return;
+  if (fitBoard()) { render(); applyFocus(false); } // the words "top" and "bottom" change too
+  else view.refit();
 }).observe(wrap);
 
 {
-  const { width, height } = wrap.getBoundingClientRect();
-  view.setOrient(BoardView.fit(width || 800, height || 500));
+  fitBoard();
   const i = STEPS.findIndex(s => '#' + s.id === location.hash);
   go(i >= 0 ? i : 0, false);
 }
