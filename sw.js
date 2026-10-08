@@ -2,9 +2,9 @@
 // Anything the person saves lives in localStorage, not here.
 // Network first, so a new version shows up as soon as you're online.
 
-const CACHE = 'rows-and-rails-v1'; // bump the number when the file list changes
+const CACHE = 'rows-and-rails-v2'; // bump the number when the file list changes
 const SHELL = [
-  './', 'index.html', 'icon.svg', 'manifest.webmanifest',
+  './', 'index.html', 'icon.svg', 'manifest.webmanifest', 'carry.js',
   'css/app.css', 'js/app.js', 'js/board.js', 'js/circuit.js', 'js/render.js', 'js/lessons.js',
   'fonts/figtree.woff2', 'fonts/plex-mono-500.woff2',
 ];

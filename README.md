@@ -1,6 +1,6 @@
 # Rows and Rails
 
-**Use it: [junkdrawer.works/rows-and-rails](https://junkdrawer.works/rows-and-rails/)**
+**Use it: [rows-and-rails.junkdrawer.works](https://rows-and-rails.junkdrawer.works/)**
 
 **A breadboard you can see inside.** Tap any hole to see which other holes it's joined to, switch the plastic to see-through to look at the metal clips underneath, then light an LED one part at a time with the current drawn flowing round the loop. It ends with the usual mistakes, a quick quiz and a board of your own to build on.
 
@@ -50,3 +50,5 @@ To put it online with GitHub Pages: **Settings → Pages → Build and deploymen
 - `test/circuit.test.mjs`, `test/e2e.mjs`: the tests.
 - `fonts/`: Figtree and IBM Plex Mono (SIL Open Font License), served from here so nothing loads from elsewhere.
 - `sw.js`: keeps a copy for using offline.
+- `carry.js`: brings a saved build over from the old address, junkdrawer.works/rows-and-rails, the first time it opens here.
+- `CNAME`: its own address, rows-and-rails.junkdrawer.works, so it installs as an app of its own.

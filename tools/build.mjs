@@ -23,6 +23,7 @@ js = js.replace(/\nif \('serviceWorker' in navigator[^\n]*\n/, '\n');
 const html = await read('index.html');
 const body = html.slice(html.indexOf('<body>') + 6, html.indexOf('</body>'))
   .replace('<script type="module" src="js/app.js"></script>', '')
+  .replace(/ *<script src="carry\.js"><\/script>\n/, '')
   .replace('src="icon.svg"', `src="data:image/svg+xml;base64,${await b64('icon.svg')}"`);
 
 const out = `<title>Rows and Rails</title>
