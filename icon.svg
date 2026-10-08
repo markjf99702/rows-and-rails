@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs><clipPath id="tile"><rect width="64" height="64" rx="14"/></clipPath></defs>
+  <g clip-path="url(#tile)">
+    <rect width="64" height="64" fill="#1f3a3a"/>
+    <rect x="9" y="12" width="46" height="40" rx="5" fill="#f6f4ee"/>
+    <path d="M13 17.5h38" stroke="#d8343a" stroke-width="1.6"/><path d="M13 46.5h38" stroke="#2f6fd6" stroke-width="1.6"/>
+    <path d="M9 31h46v3H9z" fill="#dcd7cb"/>
+    <g fill="#34312d">
+      <rect x="14" y="21" width="3.4" height="3.4" rx=".7"/><rect x="20" y="21" width="3.4" height="3.4" rx=".7"/><rect x="40.6" y="21" width="3.4" height="3.4" rx=".7"/><rect x="46.6" y="21" width="3.4" height="3.4" rx=".7"/>
+      <rect x="14" y="26" width="3.4" height="3.4" rx=".7"/><rect x="20" y="26" width="3.4" height="3.4" rx=".7"/><rect x="40.6" y="26" width="3.4" height="3.4" rx=".7"/><rect x="46.6" y="26" width="3.4" height="3.4" rx=".7"/>
+      <rect x="14" y="36" width="3.4" height="3.4" rx=".7"/><rect x="20" y="36" width="3.4" height="3.4" rx=".7"/><rect x="26" y="36" width="3.4" height="3.4" rx=".7"/><rect x="34.6" y="36" width="3.4" height="3.4" rx=".7"/><rect x="40.6" y="36" width="3.4" height="3.4" rx=".7"/><rect x="46.6" y="36" width="3.4" height="3.4" rx=".7"/>
+      <rect x="14" y="41" width="3.4" height="3.4" rx=".7"/><rect x="20" y="41" width="3.4" height="3.4" rx=".7"/><rect x="26" y="41" width="3.4" height="3.4" rx=".7"/><rect x="34.6" y="41" width="3.4" height="3.4" rx=".7"/><rect x="40.6" y="41" width="3.4" height="3.4" rx=".7"/><rect x="46.6" y="41" width="3.4" height="3.4" rx=".7"/>
+    </g>
+    <circle cx="32" cy="24.5" r="12" fill="#ff5a3c" opacity=".28"/>
+    <circle cx="32" cy="24.5" r="5.6" fill="#ff5b52" stroke="#ffc9c0" stroke-width=".8"/>
+    <circle cx="30.2" cy="22.7" r="1.6" fill="#fff" opacity=".7"/>
+    <path d="M21.7 42.7L42.3 37.7" stroke="#2f9e57" stroke-width="3.2" stroke-linecap="round"/>
+  </g>
+</svg>

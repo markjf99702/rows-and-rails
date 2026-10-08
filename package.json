@@ -1,0 +1,10 @@
+{
+  "name": "rows-and-rails",
+  "private": true,
+  "type": "module",
+  "description": "See how a breadboard is wired inside, then light an LED on one.",
+  "scripts": {
+    "test": "node --test test/circuit.test.mjs && node test/e2e.mjs",
+    "build": "node tools/build.mjs"
+  }
+}

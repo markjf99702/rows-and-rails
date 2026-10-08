@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Rows and Rails</title>
+  <meta name="description" content="A breadboard you can see inside. Tap holes to see which are joined, look at the metal clips under the plastic, light an LED step by step, and build your own circuit.">
+  <meta property="og:title" content="Rows and Rails">
+  <meta property="og:description" content="How a breadboard is wired inside, and your first LED circuit.">
+  <meta property="og:image" content="https://junkdrawer.works/rows-and-rails/og.png">
+  <meta property="og:url" content="https://junkdrawer.works/rows-and-rails/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#e6e1d5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#15181c" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="preload" href="fonts/figtree.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <noscript><p class="noscript">Rows and Rails needs JavaScript to draw the breadboard.</p></noscript>
+  <header class="top">
+    <img src="icon.svg" alt="" width="28" height="28">
+    <p class="name">Rows and Rails</p>
+    <p class="tag">How a breadboard works</p>
+  </header>
+  <main class="app">
+    <section class="stage" aria-label="Breadboard">
+      <div class="stage-bar">
+        <button id="xray" class="toggle" aria-pressed="false"><span class="eye" aria-hidden="true"></span>See inside</button>
+        <p id="info" class="info" aria-live="polite"></p>
+        <div id="tools" class="tools" role="group" aria-label="Parts" hidden></div>
+      </div>
+      <div class="board-wrap">
+        <svg id="board" role="img" aria-label="A half-size breadboard: 30 numbered rows with holes a to j, split by a gap down the middle, and two power rails along each edge."></svg>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-scroll">
+        <p id="kicker" class="kicker"></p>
+        <h1 id="title"></h1>
+        <div id="body" class="body"></div>
+        <div id="extra" class="extra"></div>
+        <footer class="jd-foot">
+          <a href="https://junkdrawer.works/">Part of junkdrawer.works</a>
+          <span aria-hidden="true">·</span>
+          <a href="https://junkdrawer.works/privacy.html">Privacy</a>
+        </footer>
+      </div>
+      <nav class="steps" aria-label="Steps">
+        <button id="back" class="btn quiet">Back</button>
+        <ol id="dots"></ol>
+        <button id="next" class="btn">Next</button>
+      </nav>
+    </section>
+  </main>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
