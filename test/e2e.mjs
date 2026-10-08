@@ -157,6 +157,62 @@ await page.click('[data-tool="led"]'); await tap('c13'); await tap('c12');
 await page.click('button:has-text("Turn it around")');
 assert.equal(await page.locator('.part-led.led-lit').count(), 1);
 
+// ----- Level 2: the XIAO and the sensor -----
+await go('build');
+assert.equal(await text('#next'), 'Level 2', 'the last step of level 1 leads on to level 2');
+await page.click('#next');
+assert.match(await text('#kicker'), /Level 2 · Step 1 of 8/i);
+assert.equal(await page.locator('.levels button[data-level="2"][aria-pressed="true"]').count(), 1);
+assert.equal(await page.locator('.part-xiao').count(), 1);
+await tap('d4');
+assert.match(await text('#info'), /XIAO’s 3V3 pin/);
+
+await go('xled');
+assert.equal(await page.locator('.part-led.led-lit').count(), 1, 'D10 HIGH lights the LED');
+await page.click('button:has-text("Set D10 LOW")');
+assert.equal(await page.locator('.part-led.led-off').count(), 1);
+assert.equal(await page.locator('.bus-dots').count(), 2, 'messages on SDA and SCL');
+
+await go('run');
+assert.match(await text('#extra .verdict'), /LED is off/);
+await page.evaluate(() => { const s = document.querySelector('#temp'); s.value = '30'; s.dispatchEvent(new Event('input')); });
+assert.equal(await page.locator('.part-led.led-lit').count(), 1, 'warm enough to switch the LED on');
+await page.waitForTimeout(1200);
+assert.match(await text('#serial'), /Temperature: 30\.\d C/);
+
+await go('xmistakes');
+const tabs2 = page.locator('.tab');
+for (let i = 0; i < await tabs2.count(); i++) {
+  await tabs2.nth(i).click();
+  const said = (await page.locator('#extra .verdict').allInnerTexts()).join(' ');
+  assert.match(said, /doesn’t answer|stays dark|burns out|on 5 V/, 'level 2 mistake ' + i);
+  await page.click('button:has-text("Show the fix")');
+  assert.deepEqual(await page.locator('#extra .verdict').allInnerTexts(), ['The sensor answers.', 'D10 lights the LED.'], 'level 2 fix ' + i);
+}
+
+// Wire it yourself, one tap at a time.
+await go('challenge');
+assert.equal(await page.locator('.checklist li.ok').count(), 1, 'only "no short circuits" to begin with');
+await page.click('[data-tool="wire"]');
+for (const [a, b] of [['a4', 'T+4'], ['a3', 'T-3'], ['f17', 'T+17'], ['f18', 'T-18'], ['g19', 'i6'], ['f20', 'j7']]) { await tap(a); await tap(b); }
+assert.match(await text('.checklist'), /SDA and SCL are swapped/);
+await page.click('[data-tool="remove"]');
+await tap('i6'); await tap('j7');
+await page.click('[data-tool="wire"]');
+await tap('g19'); await tap('j7'); await tap('f20'); await tap('i6');
+assert.equal(await page.locator('.checklist li.ok').count(), 5, 'the sensor is wired');
+await tap('e5');
+assert.equal(await text('#info'), 'e5 is under the XIAO. Pick a free hole.', 'a hole under the XIAO is taken');
+await page.click('[data-tool="resistor"]'); await tap('b5'); await tap('b10');
+await page.click('[data-tool="led"]'); await tap('d10'); await tap('d11');
+await page.click('[data-tool="wire"]'); await tap('a11'); await tap('T-12');
+assert.equal(await page.locator('.checklist li.ok').count(), 6);
+assert.match(await text('#extra'), /All wired/);
+await page.reload();
+await page.evaluate(() => document.fonts.ready);
+assert.match(await text('#extra'), /All wired/, 'the challenge is saved');
+await go('build');
+
 // Fits a phone: nothing scrolls sideways.
 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the page scrolls sideways on a phone');
 

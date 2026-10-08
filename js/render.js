@@ -2,8 +2,8 @@
 // The board lies across a wide screen ('h') and stands up on a tall one ('v'); everything is drawn
 // in board coordinates and mapped through pt(), so the same scene works either way.
 
-import { HOLES, hole, netHoles, RAILS, RAIL_X, COLS, LETTERS, ROW_Y, EXTENT, holeNear } from './board.js';
-import { analyze } from './circuit.js';
+import { HOLES, hole, netHoles, RAILS, RAIL_X, COLS, LETTERS, ROW_Y, EXTENT, holeNear, xiaoPins, sensorPins, XIAO_ALSO } from './board.js';
+import { analyze, sensorStatus, wireRoute } from './circuit.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const P = 10; // SVG units per hole spacing
@@ -214,7 +214,7 @@ export class BoardView {
   // scene: { parts, highlights: [{ net, tone }], notes: [{ at: [x, y], text }], marks: [{ hole, kind }], flow, xray }
   draw(scene) {
     this.scene = scene;
-    const r = analyze(scene.parts || []);
+    const r = analyze(scene.parts || [], { high: !!scene.high });
     this.result = r;
     this.svg.classList.toggle('xray-on', scene.xray === 'on');
     this.svg.classList.toggle('xray-peek', scene.xray === 'peek');
@@ -235,9 +235,22 @@ export class BoardView {
 
     this.gFlow.replaceChildren();
     if (scene.flow !== false && r.flow && r.leds.some(l => l.state === 'lit')) {
-      const pts = this.flowPath(r.flow).map(p => p.join(',')).join(' ');
+      const pts = this.flowPath(r.flow, r.flowFrom, r.flowTo).map(p => p.join(',')).join(' ');
       el('polyline', { points: pts, class: 'flow-path' }, this.gFlow);
       el('polyline', { points: pts, class: 'flow-dots' }, this.gFlow);
+    }
+    // The XIAO and the sensor talking: messages along SDA and SCL, when both are wired right.
+    const sensor = (scene.parts || []).find(p => p.type === 'sensor'), xiao = (scene.parts || []).find(p => p.type === 'xiao');
+    if (scene.bus && sensor && xiao && sensorStatus(scene.parts).ok) {
+      const xp = Object.fromEntries(xiaoPins(xiao.col).map(q => [q.name, q.hole]));
+      const sp = Object.fromEntries(sensorPins(sensor.col, sensor.row).map(q => [q.name, q.hole]));
+      for (const [name, pin] of [['SDA', 'D4'], ['SCL', 'D5']]) {
+        const route = wireRoute(scene.parts, xp[pin], sp[name]);
+        if (!route) continue;
+        const pts = this.flowPath(route, xp[pin], sp[name]).map(p => p.join(',')).join(' ');
+        el('polyline', { points: pts, class: 'bus-path bus-' + name.toLowerCase() }, this.gFlow);
+        el('polyline', { points: pts, class: 'bus-dots bus-' + name.toLowerCase() }, this.gFlow);
+      }
     }
 
     this.gMarks.replaceChildren();
@@ -247,16 +260,16 @@ export class BoardView {
   }
 
   // Where current runs for one loop, on screen: along the clips between parts, and up through each LED's dome.
-  flowPath(flow) {
+  flowPath(flow, from = 'BAT+', to = 'BAT-') {
     const pts = [];
     const at = id => { const h = hole(id); pts.push(this.pt(h.x, h.y)); };
-    at('BAT+');
+    at(from);
     for (const s of flow) {
       at(s.from);
       if (s.edge.kind === 'led') pts.push(this.domeAt(s.edge.a, s.edge.b).d);
       at(s.to);
     }
-    at('BAT-');
+    at(to);
     return pts.filter((p, i) => i === 0 || p[0] !== pts[i - 1][0] || p[1] !== pts[i - 1][1]);
   }
 
@@ -320,6 +333,8 @@ export class BoardView {
   drawPart(p, g, ledState, short) {
     if (p.type === 'battery') return this.drawBattery(g, short);
     if (p.type === 'chip') return this.drawChip(p, g);
+    if (p.type === 'xiao') return this.drawXiao(p, g);
+    if (p.type === 'sensor') return this.drawSensor(p, g);
     const A = hole(p.a), Bh = hole(p.b);
     const [ax, ay] = this.pt(A.x, A.y), [bx, by] = this.pt(Bh.x, Bh.y);
     const mx = (ax + bx) / 2, my = (ay + by) / 2;
@@ -381,6 +396,45 @@ export class BoardView {
     }
     this.text(0.35, -1.55, '+', { class: 'bat-sign plus' }, g);
     this.text(3.65, -1.55, '−', { class: 'bat-sign minus' }, g);
+  }
+
+  // The XIAO from above: USB-C toward row 1, the metal can in the middle, every pin labelled.
+  drawXiao(p, g) {
+    const x0 = p.col - 1;
+    // the cable to your computer, off the end of the board
+    this.line(-6, 9, x0 - 1.2, 9, { class: 'usb-cable' }, g);
+    this.rect(x0 - 1.25, 8.1, x0 - 0.35, 9.9, { rx: P * 0.2, class: 'usb-plug' }, g);
+    this.rect(x0 - 0.5, 5.55, x0 + 6.5, 12.45, { rx: P * 0.35, class: 'xiao-pcb' }, g);
+    this.rect(x0 - 0.75, 7.95, x0 + 0.35, 10.05, { rx: P * 0.25, class: 'usb-port' }, g);
+    this.rect(x0 + 1.15, 7.55, x0 + 5.3, 9.95, { rx: P * 0.12, class: 'xiao-can' }, g);
+    // The name reads across the can either way up: stacked along the board when it stands upright.
+    const [n1, n2] = this.orient === 'h' ? [[x0 + 3.22, 8.4], [x0 + 3.22, 9.25]] : [[x0 + 2.75, 8.75], [x0 + 3.75, 8.75]];
+    this.text(...n1, 'XIAO', { class: 'xiao-name' }, g);
+    this.text(...n2, 'ESP32C3', { class: 'xiao-sub' }, g);
+    for (const q of xiaoPins(p.col)) {
+      const h = hole(q.hole);
+      const [cx, cy] = this.pt(h.x, h.y);
+      el('circle', { cx, cy, r: P * 0.26, class: 'xiao-pad' + (q.name === '3V3' || q.name === '5V' ? ' pwr' : q.name === 'GND' ? ' gnd' : '') }, g);
+      const inward = h.y < 9 ? 0.85 : -0.85;
+      this.text(h.x, h.y + inward, q.name, { class: 'xiao-pin' }, g);
+      if (q.name === 'D4' || q.name === 'D5') this.text(h.x, h.y + inward * 1.68, XIAO_ALSO[q.name], { class: 'xiao-pin also' }, g);
+    }
+  }
+
+  // A BME280 breakout lying flat, its four pins in one row and the board over the holes beside them.
+  drawSensor(p, g) {
+    const x0 = p.col - 1, y = ROW_Y[p.row];
+    this.rect(x0 - 0.6, y - 0.45, x0 + 3.6, y + 3.6, { rx: P * 0.3, class: 'sensor-pcb' }, g);
+    this.rect(x0 + 1.05, y + 1.35, x0 + 1.95, y + 2.25, { rx: P * 0.06, class: 'sensor-chip' }, g);
+    const [hx, hy] = this.pt(x0 + 1.5, y + 1.8);
+    el('circle', { cx: hx, cy: hy, r: P * 0.12, class: 'sensor-vent' }, g);
+    this.text(x0 + 1.5, y + 3.0, 'BME280', { class: 'sensor-name' }, g);
+    for (const q of sensorPins(p.col, p.row)) {
+      const h = hole(q.hole);
+      const [cx, cy] = this.pt(h.x, h.y);
+      el('circle', { cx, cy, r: P * 0.24, class: 'xiao-pad' }, g);
+      this.text(h.x, h.y + 0.78, q.name, { class: 'xiao-pin' }, g);
+    }
   }
 
   drawChip(p, g) {

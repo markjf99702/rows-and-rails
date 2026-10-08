@@ -62,3 +62,35 @@ test('two LEDs in a row both light', () => {
     { type: 'led', a: 'd13', b: 'd14' }, { type: 'wire', a: 'a14', b: 'T-15' }];
   assert.equal(state(parts), 'lit,lit');
 });
+
+// ----- Level 2 -----
+import { sensorStatus } from '../js/circuit.js';
+const xiao = { type: 'xiao', col: 2 }, bme = { type: 'sensor', col: 17, row: 'h' };
+const L2 = [xiao, bme,
+  { type: 'wire', a: 'a4', b: 'T+4' }, { type: 'wire', a: 'a3', b: 'T-3' },
+  { type: 'wire', a: 'f17', b: 'T+17' }, { type: 'wire', a: 'f18', b: 'T-18' },
+  { type: 'wire', a: 'g19', b: 'j7' }, { type: 'wire', a: 'f20', b: 'i6' },
+  { type: 'resistor', a: 'b5', b: 'b10' }, { type: 'led', a: 'd10', b: 'd11' }, { type: 'wire', a: 'a11', b: 'T-12' }];
+const swap2 = (i, p) => L2.map((q, k) => (k === i ? p : q));
+
+test('the XIAO circuit: the sensor answers and D10 lights the LED', () => {
+  assert.equal(sensorStatus(L2).ok, true);
+  assert.equal(analyze(L2, { high: true }).leds[0].state, 'lit');
+  assert.deepEqual(analyze(L2, { high: true }).leds[0].by, ['D10']);
+  const low = analyze(L2, { high: false }).leds[0];
+  assert.equal(low.state + ':' + low.why, 'off:low');
+  assert.equal(analyze(L2, { high: true }).flowFrom, 'd5');
+});
+
+test('XIAO mistakes', () => {
+  const swapped = sensorStatus(swap2(6, { type: 'wire', a: 'g19', b: 'i6' }).map((q, k) => (k === 7 ? { type: 'wire', a: 'f20', b: 'j7' } : q)));
+  assert.equal(swapped.ok, false);
+  assert.match(swapped.items.find(i => i.pin === 'SDA').say, /swapped/);
+  const fiveVolt = sensorStatus(swap2(2, { type: 'wire', a: 'a2', b: 'T+2' }));
+  assert.equal(fiveVolt.items[0].warn, true);
+  assert.equal(sensorStatus(L2.filter((_, k) => k !== 5)).items.find(i => i.pin === 'GND').ok, false);
+  assert.equal(sensorStatus(swap2(4, { type: 'wire', a: 'f17', b: 'B+17' })).items[0].ok, false, 'the bottom rail isn’t powered');
+  assert.equal(analyze(swap2(8, { type: 'wire', a: 'b5', b: 'b10' }), { high: true }).leds[0].state, 'burned');
+  assert.equal(analyze(swap2(8, { type: 'resistor', a: 'b6', b: 'b10' }), { high: true }).leds[0].state, 'off', 'D9 isn’t what the code switches');
+  assert.equal(analyze([...L2, { type: 'wire', a: 'T+20', b: 'T-20' }], { high: true }).short, true);
+});

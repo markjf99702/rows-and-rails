@@ -3,8 +3,10 @@
 // Every strip of holes is a node. Wires and battery leads join two nodes with nothing in between,
 // resistors join them both ways, and an LED only lets current through from its long leg (+) to its
 // short leg (−). We look for every loop that leaves the battery's + and comes back to its −.
+// In level 2 the XIAO is the power instead: its 3V3 and 5V pins are always on, and D10 is on
+// when the code sets it HIGH. All three come back to its GND pin.
 
-import { hole, netOf, BATTERY } from './board.js';
+import { hole, netOf, BATTERY, xiaoPins, sensorPins } from './board.js';
 
 const MAX_PATHS = 400;
 
@@ -24,8 +26,9 @@ export function edgesOf(parts) {
   return edges;
 }
 
-// Every simple path from the battery's + to its −, as a list of steps { edge, from, to } (hole ids).
-export function loops(edges, flip = -1) {
+// Every simple path from one strip to another (the battery's + to its −, unless told otherwise),
+// as a list of steps { edge, from, to } (hole ids).
+export function loops(edges, flip = -1, start = 'bat+', end = 'bat-') {
   const adj = new Map();
   const add = (n, step) => { if (!adj.has(n)) adj.set(n, []); adj.get(n).push(step); };
   edges.forEach((e, k) => {
@@ -36,53 +39,116 @@ export function loops(edges, flip = -1) {
     if (backward) add(e.nb, { edge: e, from: e.b, to: e.a, next: e.na });
   });
   const out = [];
-  const seen = new Set(['bat+']);
+  const seen = new Set([start]);
   const path = [];
   (function walk(net) {
     if (out.length >= MAX_PATHS) return;
-    if (net === 'bat-') { out.push(path.slice()); return; }
+    if (net === end) { out.push(path.slice()); return; }
     for (const step of adj.get(net) || []) {
       if (seen.has(step.next)) continue;
       seen.add(step.next); path.push(step);
       walk(step.next);
       path.pop(); seen.delete(step.next);
     }
-  })('bat+');
+  })(start);
   return out;
 }
 
 const isWire = e => e.kind === 'wire' || e.kind === 'lead';
 
+// Where power comes from: { name, from, to } with from/to the holes at its + and − ends.
+export function supplies(parts, { high = false } = {}) {
+  const out = [];
+  if (parts.some(p => p.type === 'battery')) out.push({ name: 'battery', from: 'BAT+', to: 'BAT-', on: true });
+  const x = parts.find(p => p.type === 'xiao');
+  if (x) {
+    const pin = Object.fromEntries(xiaoPins(x.col).map(q => [q.name, q.hole]));
+    out.push({ name: '3V3', from: pin['3V3'], to: pin.GND, on: true });
+    out.push({ name: '5V', from: pin['5V'], to: pin.GND, on: true });
+    out.push({ name: 'D10', from: pin.D10, to: pin.GND, on: high });
+  }
+  return out;
+}
+
 // What happens when you switch it on.
-//   short:   + is joined straight to − with wires only; the battery gets hot and nothing lights.
-//   leds:    one entry per LED: { part, state: 'lit' | 'burned' | 'off', why }
-//            why for an LED that's off: 'same-strip', 'backwards', 'open', 'shorted'
-//   flow:    the steps of one loop to draw current along (through a lit LED when there is one)
-export function analyze(parts) {
-  const hasBattery = parts.some(p => p.type === 'battery');
+//   short:   + is joined straight to − with wires only; the supply gets hot and nothing lights.
+//   leds:    one entry per LED: { part, state: 'lit' | 'burned' | 'off', why, by }
+//            why for an LED that's off: 'same-strip', 'backwards', 'open', 'shorted', 'low' (its pin is LOW)
+//            by: the supplies lighting it ('battery', '3V3', 'D10' ...)
+//   flow:    the steps of one loop to draw current along, from the hole flowFrom to flowTo
+// opts.high: whether the XIAO's D10 pin is HIGH.
+export function analyze(parts, opts = {}) {
   const edges = edgesOf(parts);
-  const paths = hasBattery ? loops(edges) : [];
-  const short = paths.some(p => p.every(s => isWire(s.edge)));
+  const all = supplies(parts, { high: true });
+  const live = new Set(supplies(parts, opts).filter(q => q.on).map(q => q.name));
+  const tagged = (flip = -1) => all.flatMap(q => loops(edges, flip, netOf(q.from), netOf(q.to)).map(path => Object.assign(path, { supply: q })));
+  const every = tagged();
+  const paths = every.filter(p => live.has(p.supply.name));
+  const short = every.some(p => p.supply.name !== 'D10' && p.every(s => isWire(s.edge)));
   const leds = [];
   edges.forEach((e, k) => {
     if (e.kind !== 'led') return;
     const through = paths.filter(p => p.some(s => s.edge === e));
     let state = 'off', why = null;
-    if (!hasBattery) why = 'open';
+    if (!all.length) why = 'open';
     else if (e.na === e.nb) why = 'same-strip';
     else if (short) why = 'shorted';
     else if (through.length) {
       state = through.some(p => !p.some(s => s.edge.kind === 'resistor')) ? 'burned' : 'lit';
-    } else if (loops(edges, k).some(p => p.some(s => s.edge === e))) why = 'backwards';
+    } else if (every.some(p => p.some(s => s.edge === e))) why = 'low';
+    else if (tagged(k).some(p => p.some(s => s.edge === e))) why = 'backwards';
     else why = 'open';
-    leds.push({ part: e.part, state, why });
+    leds.push({ part: e.part, state, why, by: [...new Set(through.map(p => p.supply.name))] });
   });
   let flow = null;
   if (!short) {
     flow = paths.find(p => p.some(s => s.edge.kind === 'led' && leds.find(l => l.part === s.edge.part)?.state === 'lit'))
       || paths.find(p => p.some(s => s.edge.kind === 'resistor')) || null;
   }
-  return { short, leds, flow, paths: paths.length };
+  return { short, leds, flow, flowFrom: flow?.supply.from, flowTo: flow?.supply.to, paths: paths.length };
+}
+
+// Which of the XIAO's pins each sensor pin is wired to: { VIN: ['3V3'], GND: ['GND'], SCL: ['D5'], SDA: ['D4'] }.
+// Wires join strips; resistors and LEDs don't count, because a signal or power through them isn't a connection.
+export function sensorWiring(parts) {
+  const x = parts.find(p => p.type === 'xiao'), sensor = parts.find(p => p.type === 'sensor');
+  if (!x || !sensor) return null;
+  const up = new Map();
+  const find = n => { while (up.has(n)) n = up.get(n); return n; };
+  for (const e of edgesOf(parts)) if (isWire(e)) { const a = find(e.na), b = find(e.nb); if (a !== b) up.set(a, b); }
+  const pinsOn = new Map();
+  for (const q of xiaoPins(x.col)) {
+    const n = find(netOf(q.hole));
+    if (!pinsOn.has(n)) pinsOn.set(n, []);
+    pinsOn.get(n).push(q.name);
+  }
+  return Object.fromEntries(sensorPins(sensor.col, sensor.row).map(q => [q.name, pinsOn.get(find(netOf(q.hole))) || []]));
+}
+
+// Does the sensor answer? Each of its four pins, checked: { ok, items: [{ pin, ok, warn, say }] }
+export function sensorStatus(parts) {
+  const w = sensorWiring(parts);
+  if (!w) return null;
+  const items = [];
+  const has = (pin, name) => w[pin].includes(name);
+  if (has('VIN', 'GND')) items.push({ pin: 'VIN', ok: false, say: 'VIN is joined to GND, so the sensor gets no power.' });
+  else if (has('VIN', '3V3')) items.push({ pin: 'VIN', ok: true, say: 'VIN gets 3.3 V from the XIAO.' });
+  else if (has('VIN', '5V')) items.push({ pin: 'VIN', ok: true, warn: true, say: 'VIN is on 5 V. Some boards cope, but the BME280 chip itself runs on 3.3 V. Use 3V3.' });
+  else items.push({ pin: 'VIN', ok: false, say: 'VIN isn’t connected to the XIAO’s 3V3, so the sensor has no power.' });
+  if (has('GND', 'GND')) items.push({ pin: 'GND', ok: true, say: 'GND shares the XIAO’s ground.' });
+  else items.push({ pin: 'GND', ok: false, say: 'GND isn’t connected to the XIAO’s GND. Without a shared ground there’s no loop for power or signals.' });
+  for (const [pin, want, other] of [['SDA', 'D4', 'D5'], ['SCL', 'D5', 'D4']]) {
+    if (has(pin, want)) items.push({ pin, ok: true, say: `${pin} goes to ${want}.` });
+    else if (has(pin, other)) items.push({ pin, ok: false, say: `${pin} goes to ${other}: SDA and SCL are swapped.` });
+    else items.push({ pin, ok: false, say: `${pin} isn’t connected to ${want}.` });
+  }
+  return { ok: items.every(i => i.ok), items, wiring: w };
+}
+
+// The wires a signal takes from one hole to another, as loop steps, or null if they aren't joined by wires.
+export function wireRoute(parts, from, to) {
+  const edges = edgesOf(parts).filter(isWire);
+  return loops(edges, -1, netOf(from), netOf(to))[0] || (netOf(from) === netOf(to) ? [] : null);
 }
 
 // The points current passes through for one loop, in board coordinates.

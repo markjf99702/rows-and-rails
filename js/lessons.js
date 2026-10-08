@@ -175,3 +175,157 @@ export const MISTAKES = [
   },
 ];
 for (const m of MISTAKES) if (!m.fix) m.fix = LED_CIRCUIT;
+
+// ----- Level 2: a XIAO ESP32C3 and a BME280 temperature sensor -----
+
+export const xiao = { type: 'xiao', col: 2, fixed: true };
+export const bme = { type: 'sensor', col: 17, row: 'h', fixed: true };
+const w3v3 = { type: 'wire', a: 'a4', b: 'T+4', color: 'red' };
+const wgnd = { type: 'wire', a: 'a3', b: 'T-3', color: 'black' };
+const svin = { type: 'wire', a: 'f17', b: 'T+17', color: 'red' };
+const sgnd = { type: 'wire', a: 'f18', b: 'T-18', color: 'black' };
+const scl = { type: 'wire', a: 'g19', b: 'j7', color: 'yellow' };
+const sda = { type: 'wire', a: 'f20', b: 'i6', color: 'blue' };
+const res2 = { type: 'resistor', a: 'b5', b: 'b10' };
+const led2 = { type: 'led', a: 'd10', b: 'd11' };
+const lgnd = { type: 'wire', a: 'a11', b: 'T-12', color: 'black' };
+export const XIAO_CIRCUIT = [xiao, bme, w3v3, wgnd, svin, sgnd, scl, sda, res2, led2, lgnd];
+export const HOT = 26;
+
+const XIAO_AREA = [-1.9, -1.6, 21, 18.6];
+
+export const SKETCH = `#include <Wire.h>
+#include <Adafruit_BME280.h>
+
+Adafruit_BME280 bme;
+const int LED_PIN = D10;
+const float HOT = ${HOT}.0;     // degrees C
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(LED_PIN, OUTPUT);
+  Wire.begin();              // SDA on D4, SCL on D5
+  if (!bme.begin(0x76)) {    // some boards use 0x77
+    Serial.println("Could not find a BME280 sensor");
+    while (true) delay(10);
+  }
+}
+
+void loop() {
+  float t = bme.readTemperature();
+  Serial.print("Temperature: ");
+  Serial.print(t, 1);
+  Serial.println(" C");
+  digitalWrite(LED_PIN, t > HOT ? HIGH : LOW);
+  delay(1000);
+}`;
+
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+STEPS.push(
+  {
+    id: 'xiao', level: 2, title: 'Meet the XIAO', xray: 'off', focus: XIAO_AREA,
+    parts: [xiao],
+    highlights: [{ net: '4ae', tone: 'plus' }, { net: '3ae', tone: 'minus' }, { net: '6fj', tone: 'a' }, { net: '7fj', tone: 'b' }],
+    body: `<p>The Seeed Studio <b>XIAO ESP32C3</b> is a tiny computer with Wi-Fi and Bluetooth. It runs the code you write, reads sensors, and switches things on and off. A USB-C cable from your computer powers it and loads the code.</p>
+      <p>It has 14 pins, seven down each side, 0.6 inch apart. It sits across the middle gap so every pin gets a clip of its own, with free holes beside each pin for wires.</p>
+      <ul>
+        <li><b class="plus">3V3</b>: 3.3 volts out, to power sensors.</li>
+        <li><b class="minus">GND</b>: ground, the − side of everything.</li>
+        <li><b>5V</b>: straight from USB. Too much for most sensors.</li>
+        <li><b>D0 to D10</b>: pins your code reads or switches on and off. D4 and D5 are also <b>SDA</b> and <b>SCL</b>, the two wires sensors talk on.</li>
+      </ul>
+      <p class="hint">It comes without pins: solder on the two header strips first. The XIAO ESP32S3 and ESP32C6 have the same pins in the same places.</p>`,
+  },
+  {
+    id: 'xpower', level: 2, title: 'Power the rails', xray: 'peek', focus: XIAO_AREA,
+    parts: [xiao, w3v3, wgnd],
+    highlights: [{ net: 'T+', tone: 'plus' }, { net: 'T-', tone: 'minus' }],
+    body: `<p>One wire from <b class="plus">3V3 to the + rail</b>, one from <b class="minus">GND to the − rail</b>. Now the {T} rails carry 3.3 volts from the XIAO, the way the battery fed them in level 1.</p>
+      <p>Leave 5V alone. It's whatever the USB port gives, and most sensors want 3.3.</p>
+      <p>Only the {T} rails are live. The {B} pair isn't joined to them.</p>`,
+  },
+  {
+    id: 'sensor', level: 2, title: 'Add a sensor', xray: 'peek', focus: XIAO_AREA,
+    parts: [xiao, w3v3, wgnd, bme, svin, sgnd],
+    highlights: [{ net: '17fj', tone: 'plus' }, { net: '18fj', tone: 'minus' }],
+    body: `<p>This is a <b>BME280</b> breakout: a sensor for temperature, humidity and air pressure on a little purple board. Its four pins go in row h, each on its own clip, and the board lies over the holes below them.</p>
+      <p>Two long wires reach up to the {T} rails: <b class="plus">VIN to +</b> and <b class="minus">GND to −</b>. Long wires across the gap are fine, as long as each end lands on the right clip.</p>
+      <p class="hint">Check the labels on yours. Different makers put the four pins in a different order.</p>`,
+  },
+  {
+    id: 'i2c', level: 2, title: 'Two wires to talk', xray: 'peek', focus: XIAO_AREA, bus: true,
+    parts: [xiao, w3v3, wgnd, bme, svin, sgnd, scl, sda],
+    body: `<p>The sensor and the XIAO talk over <b>I²C</b>, two wires that every I²C sensor you add can share.</p>
+      <ul>
+        <li><b class="sda">SDA</b> (data) carries the readings. It goes to <b>D4</b>.</li>
+        <li><b class="scl">SCL</b> (clock) ticks to keep both ends in step. It goes to <b>D5</b>.</li>
+      </ul>
+      <p>The moving dots are the messages. Each sensor has an address, like a house number. Most purple BME280 boards answer at <code>0x76</code>, some at <code>0x77</code>.</p>`,
+  },
+  {
+    id: 'xled', level: 2, title: 'An LED on a pin', xray: 'peek', focus: XIAO_AREA, bus: true, mode: 'pin',
+    parts: XIAO_CIRCUIT,
+    body: `<p>Pin <b>D10</b> is an output. When the code sets it <b>HIGH</b> it gives 3.3 volts, and <b>LOW</b> is 0. That's enough to light an LED through a resistor.</p>
+      <p>It's the same loop as level 1, with the pin playing the battery: D10, the resistor, row 10, the LED, row 11, a wire to −, and back to the XIAO's GND.</p>
+      <p class="hint">Never put an LED straight on a pin without its resistor. It's too much current for the LED and for the pin.</p>`,
+  },
+  {
+    id: 'run', level: 2, title: 'Run the code', xray: 'off', focus: XIAO_AREA, bus: true, mode: 'run',
+    parts: XIAO_CIRCUIT,
+    body: `<p>This sketch reads the temperature once a second and turns the LED on above ${HOT} °C. Drag the temperature, or breathe on the sensor.</p>
+      <details class="code"><summary>The code</summary><pre><code>${esc(SKETCH)}</code></pre>
+        <button class="btn quiet copy" type="button">Copy the code</button>
+        <p class="hint">In the Arduino IDE: add the esp32 boards from Espressif in the Boards Manager, pick <b>XIAO_ESP32C3</b>, and install the <b>Adafruit BME280</b> library. To see the readings, set Tools → USB CDC On Boot → Enabled, then open the Serial Monitor at 115200.</p>
+      </details>`,
+  },
+  {
+    id: 'xmistakes', level: 2, title: 'Why doesn’t it work?', xray: 'peek', focus: XIAO_AREA, mode: 'mistakes', bus: true,
+    body: `<p>The usual reasons the sensor stays silent or the LED stays dark. Pick one, then show the fix.</p>`,
+  },
+  {
+    id: 'challenge', level: 2, title: 'Wire it yourself', xray: 'off', focus: XIAO_AREA, mode: 'challenge', bus: true,
+    body: `<p>The XIAO and the sensor are in place. Add the wires, the resistor and the LED so the sensor answers and D10 can light the LED. The list below ticks off as you go.</p>
+      <p class="hint">Start with 3V3 and GND to the rails. Then everything else can reach power with a short wire.</p>`,
+  },
+);
+
+const swap2 = (i, p) => XIAO_CIRCUIT.map((q, k) => (k === i ? p : q));
+const at = p => XIAO_CIRCUIT.indexOf(p);
+
+export const MISTAKES2 = [
+  {
+    id: 'swapped', label: 'SDA and SCL swapped',
+    parts: swap2(at(scl), { type: 'wire', a: 'g19', b: 'i6', color: 'yellow' }).map(q => (q === sda ? { type: 'wire', a: 'f20', b: 'j7', color: 'blue' } : q)),
+    text: `SDA goes to D5 and SCL to D4. The XIAO sends its clock on the sensor's data pin, so the sensor never answers and the sketch prints "Could not find a BME280 sensor". Swap the two wires.`,
+  },
+  {
+    id: 'five-volt', label: 'Rails on 5V',
+    parts: swap2(at(w3v3), { type: 'wire', a: 'a2', b: 'T+2', color: 'red' }),
+    text: `The + rail is fed from 5V instead of 3V3, so the sensor and its signal lines get 5 volts. Some breakout boards cope, but the XIAO's pins are 3.3-volt only and it's an easy way to damage something. Feed the rail from 3V3.`,
+  },
+  {
+    id: 'no-ground', label: 'No shared ground',
+    parts: XIAO_CIRCUIT.filter(q => q !== sgnd),
+    highlights: [{ net: '18fj', tone: 'bad' }],
+    text: `The sensor's GND pin isn't wired to anything. Power and signals both need a way back, so with no shared ground the sensor is dead. Every part in a circuit shares the same ground.`,
+  },
+  {
+    id: 'dead-rail', label: 'Unpowered rail',
+    parts: swap2(at(svin), { type: 'wire', a: 'f17', b: 'B+17', color: 'red' }).map(q => (q === sgnd ? { type: 'wire', a: 'f18', b: 'B-18', color: 'black' } : q)),
+    highlights: [{ net: 'B+', tone: 'bad' }, { net: 'B-', tone: 'bad' }],
+    text: `The sensor is wired to the {B} rails, but the XIAO only feeds the {T} ones. Use the {T} rails, or join the two pairs with two wires.`,
+  },
+  {
+    id: 'no-resistor', label: 'LED with no resistor',
+    parts: swap2(at(res2), { type: 'wire', a: 'b5', b: 'b10', color: 'green' }),
+    text: `The LED is wired straight to D10. When the pin goes HIGH it tries to push far more current than either the LED or the pin is made for. Put the resistor back.`,
+  },
+  {
+    id: 'wrong-pin', label: 'Wrong pin',
+    parts: swap2(at(res2), { type: 'resistor', a: 'b6', b: 'b10' }),
+    highlights: [{ net: '6ae', tone: 'bad' }, { net: '5ae', tone: 'a' }],
+    text: `The resistor starts in row 6, which is D9's clip, but the code switches D10, in row 5. The code and the wiring have to name the same pin. Move the resistor up one row, or change LED_PIN to D9.`,
+  },
+];
+for (const m of MISTAKES2) if (!m.fix) m.fix = XIAO_CIRCUIT;

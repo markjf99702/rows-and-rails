@@ -2,7 +2,7 @@
 
 **Use it: [rows-and-rails.junkdrawer.works](https://rows-and-rails.junkdrawer.works/)**
 
-**A breadboard you can see inside.** Tap any hole to see which other holes it's joined to, switch the plastic to see-through to look at the metal clips underneath, then light an LED one part at a time with the current drawn flowing round the loop. It ends with the usual mistakes, a quick quiz and a board of your own to build on.
+**A breadboard you can see inside.** Tap any hole to see which other holes it's joined to, switch the plastic to see-through to look at the metal clips underneath, then light an LED one part at a time with the current drawn flowing round the loop. It ends with the usual mistakes, a quick quiz and a board of your own to build on. Level 2 puts a XIAO ESP32C3 and a BME280 temperature sensor on the board: power from the XIAO, two I²C wires to the sensor, an LED on a pin, the Arduino sketch to run it, and a challenge to wire it all yourself.
 
 <p align="center">
   <img src="docs/phone-inside.png" alt="The breadboard standing upright with its plastic see-through, showing a metal clip under every row of five holes; row 17 a to e is lit up in orange" width="250">
@@ -14,10 +14,11 @@
 
 ## How it works
 
-- **Twelve short steps.** Meet the board, look under the plastic, rows of five, the middle gap, the power rails, then build an LED circuit in four parts: power, resistor, LED, and the wire that closes the loop.
+- **Level 1: twelve short steps.** Meet the board, look under the plastic, rows of five, the middle gap, the power rails, then build an LED circuit in four parts: power, resistor, LED, and the wire that closes the loop.
+- **Level 2: a microcontroller and a sensor.** Eight steps with a Seeed Studio XIAO ESP32C3 (the S3 and C6 have the same pins) and a BME280 breakout. Wire 3V3 and GND to the rails, the sensor's SDA to D4 and SCL to D5, and an LED on D10. Moving dots show the messages on the I²C wires. **Run the code** has the real Arduino sketch to copy, a temperature to drag (or breathe on), a serial monitor, and the LED switching on above 26 °C. **Wire it yourself** starts with just the two boards and ticks off a checklist as you place each wire.
 - **Tap any hole.** Every hole on the same clip lights up, and the line above the board names them.
 - **See inside.** Fades the plastic so the metal clips show. Some steps turn it on for you.
-- **A real check, not a picture.** Every circuit on the board goes through a small circuit checker (`js/circuit.js`). It finds each loop from the battery's + back to −, knows an LED only passes current one way, and catches the usual faults: LED backwards, both legs on one clip, an open loop, no resistor (the LED burns out), and a short circuit.
+- **A real check, not a picture.** Every circuit on the board goes through a small circuit checker (`js/circuit.js`). It finds each loop from the battery's + (or the XIAO's 3V3 and D10 pins) back to −, knows an LED only passes current one way, and catches the usual faults: LED backwards, both legs on one clip, an open loop, no resistor (the LED burns out), and a short circuit.
 - **Why won't it light?** Six common mistakes, each with a "Show the fix" button.
 - **Find a connected hole.** Six rounds: one hole glows and you tap another on the same clip.
 - **Build your own.** Place wires, resistors and LEDs by tapping two holes. It tells you whether the LED lights, and why not if it doesn't. Your build is kept in this browser.
