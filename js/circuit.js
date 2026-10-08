@@ -6,7 +6,7 @@
 // In level 2 the XIAO is the power instead: its 3V3 and 5V pins are always on, and D10 is on
 // when the code sets it HIGH. All three come back to its GND pin.
 
-import { hole, netOf, BATTERY, xiaoPins, sensorPins } from './board.js';
+import { hole, netOf, BATTERY, xiaoPins, sensorPins, oledPins } from './board.js';
 
 const MAX_PATHS = 400;
 
@@ -18,6 +18,8 @@ export function edgesOf(parts) {
     if (p.type === 'battery') {
       edges.push({ part: i, kind: 'lead', a: 'BAT+', b: BATTERY.plus });
       edges.push({ part: i, kind: 'lead', a: 'BAT-', b: BATTERY.minus });
+    } else if (p.type === 'oled') {
+      for (const q of oledPins(p)) edges.push({ part: i, kind: 'lead', a: q.hole, b: q.lead });
     } else if (p.type === 'wire' || p.type === 'resistor' || p.type === 'led') {
       edges.push({ part: i, kind: p.type, a: p.a, b: p.b });
     }
@@ -108,11 +110,11 @@ export function analyze(parts, opts = {}) {
   return { short, leds, flow, flowFrom: flow?.supply.from, flowTo: flow?.supply.to, paths: paths.length };
 }
 
-// Which of the XIAO's pins each sensor pin is wired to: { VIN: ['3V3'], GND: ['GND'], SCL: ['D5'], SDA: ['D4'] }.
+// Which of the XIAO's pins each of a device's pins is wired to: { VIN: ['3V3'], GND: ['GND'], SCL: ['D5'], SDA: ['D4'] }.
 // Wires join strips; resistors and LEDs don't count, because a signal or power through them isn't a connection.
-export function sensorWiring(parts) {
-  const x = parts.find(p => p.type === 'xiao'), sensor = parts.find(p => p.type === 'sensor');
-  if (!x || !sensor) return null;
+export function sensorWiring(parts, type = 'sensor') {
+  const x = parts.find(p => p.type === 'xiao'), device = parts.find(p => p.type === type);
+  if (!x || !device) return null;
   const up = new Map();
   const find = n => { while (up.has(n)) n = up.get(n); return n; };
   for (const e of edgesOf(parts)) if (isWire(e)) { const a = find(e.na), b = find(e.nb); if (a !== b) up.set(a, b); }
@@ -122,7 +124,8 @@ export function sensorWiring(parts) {
     if (!pinsOn.has(n)) pinsOn.set(n, []);
     pinsOn.get(n).push(q.name);
   }
-  return Object.fromEntries(sensorPins(sensor.col, sensor.row).map(q => [q.name, pinsOn.get(find(netOf(q.hole))) || []]));
+  const pins = type === 'oled' ? oledPins(device) : sensorPins(device.col, device.row);
+  return Object.fromEntries(pins.map(q => [q.name, pinsOn.get(find(netOf(q.hole))) || []]));
 }
 
 // Does the sensor answer? Each of its four pins, checked: { ok, items: [{ pin, ok, warn, say }] }
@@ -141,6 +144,30 @@ export function sensorStatus(parts) {
     if (has(pin, want)) items.push({ pin, ok: true, say: `${pin} goes to ${want}.` });
     else if (has(pin, other)) items.push({ pin, ok: false, say: `${pin} goes to ${other}: SDA and SCL are swapped.` });
     else items.push({ pin, ok: false, say: `${pin} isn’t connected to ${want}.` });
+  }
+  return { ok: items.every(i => i.ok), items, wiring: w };
+}
+
+// Does the screen answer? Its four leads, checked the same way: { ok, items: [{ pin, ok, say }] }
+export function screenStatus(parts) {
+  const w = sensorWiring(parts, 'oled');
+  if (!w) return null;
+  const has = (pin, name) => w[pin].includes(name);
+  const items = [];
+  if (has('VCC', 'GND') && (has('GND', '3V3') || has('GND', '5V'))) {
+    items.push({ pin: 'VCC', ok: false, danger: true, say: 'VCC and GND are swapped: the screen gets power backwards, which can kill it for good.' });
+    items.push({ pin: 'GND', ok: false, danger: true, say: 'GND is on + and VCC on −. Follow the labels on the screen, not the order on the sensor.' });
+  } else {
+    if (has('VCC', '3V3')) items.push({ pin: 'VCC', ok: true, say: 'VCC gets 3.3 V.' });
+    else if (has('VCC', '5V')) items.push({ pin: 'VCC', ok: true, warn: true, say: 'VCC is on 5 V. Most of these screens cope, but 3V3 keeps the signals at the XIAO’s level.' });
+    else items.push({ pin: 'VCC', ok: false, say: 'VCC isn’t connected to 3V3, so the screen has no power.' });
+    if (has('GND', 'GND')) items.push({ pin: 'GND', ok: true, say: 'GND shares the XIAO’s ground.' });
+    else items.push({ pin: 'GND', ok: false, say: 'GND isn’t connected to the XIAO’s GND.' });
+  }
+  for (const [pin, want, other] of [['SDA', 'D4', 'D5'], ['SCL', 'D5', 'D4']]) {
+    if (has(pin, want)) items.push({ pin, ok: true, say: `The screen’s ${pin} reaches ${want}.` });
+    else if (has(pin, other)) items.push({ pin, ok: false, say: `The screen’s ${pin} reaches ${other}: SDA and SCL are swapped.` });
+    else items.push({ pin, ok: false, say: `The screen’s ${pin} isn’t connected to ${want}.` });
   }
   return { ok: items.every(i => i.ok), items, wiring: w };
 }

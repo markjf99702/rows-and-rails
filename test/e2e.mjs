@@ -48,14 +48,14 @@ await tap('c12');
 assert.match(await text('#info'), /c12 is joined to a12, b12, d12, e12/);
 assert.equal(await page.locator('.hl .ring').count(), 5);
 await tap('T-8');
-assert.match(await text('#info'), /all 25 holes on the left − rail/);
+assert.match(await text('#info'), /all 25 holes on the right − rail/);
 
-// Standing up on a phone, the rails are on the left and right.
+// Standing up on a phone (a quarter-turn clockwise), the top rails are on the right.
 await go('rails');
-assert.match(await text('#body'), /The left pair and the right pair aren't joined/);
-assert.equal(await page.locator('.note text', { hasText: 'left and right rails are separate' }).count(), 1);
+assert.match(await text('#body'), /The right pair and the left pair aren't joined/);
+assert.equal(await page.locator('.note text', { hasText: 'right and left rails are separate' }).count(), 1);
 await tap('T-8');
-assert.match(await text('#info'), /left − rail/);
+assert.match(await text('#info'), /right − rail/);
 await go('meet');
 
 // The building steps zoom in on a phone, and the buttons zoom out to the whole board and back.
@@ -211,6 +211,44 @@ assert.match(await text('#extra'), /All wired/);
 await page.reload();
 await page.evaluate(() => document.fonts.ready);
 assert.match(await text('#extra'), /All wired/, 'the challenge is saved');
+
+// ----- Level 3: a screen on the same two wires -----
+await go('challenge');
+assert.equal(await text('#next'), 'Level 3');
+await page.click('#next');
+assert.match(await text('#kicker'), /Level 3 · Step 1 of 5/i);
+assert.equal(await page.locator('.part-oled').count(), 1);
+await go('bus');
+await page.waitForTimeout(300);
+assert.deepEqual(await page.locator('.note.address text').allTextContents(), ['0x76', '0x3C'], 'each device has its address');
+await go('show');
+const before = await page.getAttribute('#oled', 'src');
+assert.match(before, /^data:image\/png/);
+await page.evaluate(() => { const s = document.querySelector('#temp'); s.value = '31'; s.dispatchEvent(new Event('input')); });
+assert.notEqual(await page.getAttribute('#oled', 'src'), before, 'the screen shows the new reading');
+assert.equal(await page.locator('.part-led.led-lit').count(), 1);
+assert.match(await page.getAttribute('.oled-pixels', 'href'), /^data:image\/png/, 'and so does the screen on the board');
+
+await go('blank');
+const tabs3 = page.locator('.tab');
+for (let i = 0; i < await tabs3.count(); i++) {
+  await tabs3.nth(i).click();
+  assert.match((await page.locator('#extra .verdict').allInnerTexts())[0], /dark/, 'level 3 mistake ' + i);
+  assert.equal(await page.locator('.oled-pixels[href]').count(), 0, 'nothing on the screen ' + i);
+  await page.click('button:has-text("Show the fix")');
+  assert.deepEqual(await page.locator('#extra .verdict').allInnerTexts(), ['The screen shows the reading.'], 'level 3 fix ' + i);
+}
+
+await go('final');
+await page.click('[data-tool="wire"]');
+for (const [a, b] of [['a4', 'T+4'], ['a3', 'T-3'], ['f17', 'T+17'], ['f18', 'T-18'], ['g19', 'j7'], ['f20', 'i6'], ['e22', 'f19'], ['e23', 'g20']]) { await tap(a); await tap(b); }
+await page.click('[data-tool="resistor"]'); await tap('b5'); await tap('b10');
+await page.click('[data-tool="led"]'); await tap('d10'); await tap('d11');
+await page.click('[data-tool="wire"]'); await tap('a11'); await tap('T-12');
+assert.equal(await page.locator('.checklist li.ok').count(), 10);
+assert.match(await text('#extra'), /weather station/);
+await tap('T-20');
+assert.match(await text('#info'), /screen’s GND lead/, 'the screen’s lead is in that hole');
 await go('build');
 
 // Fits a phone: nothing scrolls sideways.

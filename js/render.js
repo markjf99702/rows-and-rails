@@ -2,8 +2,8 @@
 // The board lies across a wide screen ('h') and stands up on a tall one ('v'); everything is drawn
 // in board coordinates and mapped through pt(), so the same scene works either way.
 
-import { HOLES, hole, netHoles, RAILS, RAIL_X, COLS, LETTERS, ROW_Y, EXTENT, holeNear, xiaoPins, sensorPins, XIAO_ALSO } from './board.js';
-import { analyze, sensorStatus, wireRoute } from './circuit.js';
+import { HOLES, hole, netHoles, RAILS, RAIL_X, COLS, LETTERS, ROW_Y, EXTENT, holeNear, xiaoPins, sensorPins, XIAO_ALSO, oledPins, OLED_X } from './board.js';
+import { analyze, sensorStatus, screenStatus, wireRoute } from './circuit.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const P = 10; // SVG units per hole spacing
@@ -22,13 +22,22 @@ export class BoardView {
   constructor(svg) {
     this.svg = svg;
     this.orient = null;
+    this.ext = EXTENT;   // the part of board space to show; level 3 adds room above the board for the screen
     this.scene = { parts: [] };
     this.shown = new Set();
     this.vb = null;      // what part of the board is showing, in SVG units
     this.focus = null;   // the board rectangle [x0, y0, x1, y1] to show, or null for all of it
   }
 
-  pt(x, y) { return this.orient === 'h' ? [x * P, y * P] : [y * P, x * P]; }
+  // Standing up, the board is turned a quarter-turn clockwise, the way you'd turn a real one:
+  // row 1 at the top, the a–e side on the right.
+  pt(x, y) { return this.orient === 'h' ? [x * P, y * P] : [-y * P, x * P]; }
+
+  setExtent(ext) {
+    if (ext === this.ext) return;
+    this.ext = ext;
+    if (this.orient) { this.build(); this.shown = new Set(); this.draw(this.scene); }
+  }
 
   setOrient(o) {
     if (o === this.orient) return false;
@@ -59,7 +68,7 @@ export class BoardView {
   }
 
   clamp(r) {
-    const full = this.svgRect([EXTENT.x0, EXTENT.y0, EXTENT.x1, EXTENT.y1]);
+    const full = this.svgRect([this.ext.x0, this.ext.y0, this.ext.x1, this.ext.y1]);
     const ar = r.w / r.h;
     const maxW = Math.max(full.w, full.h * ar), minW = maxW / 6;
     let w = Math.min(maxW, Math.max(minW, r.w)), h = w / ar;
@@ -72,19 +81,19 @@ export class BoardView {
 
   // Screen pixels per hole spacing when the whole board shows.
   fullPitch() {
-    const full = this.svgRect([EXTENT.x0, EXTENT.y0, EXTENT.x1, EXTENT.y1]), { w, h } = this.box();
+    const full = this.svgRect([this.ext.x0, this.ext.y0, this.ext.x1, this.ext.y1]), { w, h } = this.box();
     return Math.min(w / full.w, h / full.h) * P;
   }
 
   zoomed() {
     if (!this.vb) return false;
-    const all = this.shape(this.svgRect([EXTENT.x0, EXTENT.y0, EXTENT.x1, EXTENT.y1]));
+    const all = this.shape(this.svgRect([this.ext.x0, this.ext.y0, this.ext.x1, this.ext.y1]));
     return this.vb.w < all.w * 0.98;
   }
 
   setFocus(rect, animate = true) {
     this.focus = rect;
-    this.show(this.shape(this.svgRect(rect || [EXTENT.x0, EXTENT.y0, EXTENT.x1, EXTENT.y1])), animate);
+    this.show(this.shape(this.svgRect(rect || [this.ext.x0, this.ext.y0, this.ext.x1, this.ext.y1])), animate);
   }
 
   // After a resize: keep the same middle and the same zoom, in the new shape.
@@ -132,8 +141,8 @@ export class BoardView {
   }
 
   // Which way gives bigger holes in a box this size?
-  static fit(w, h) {
-    const bw = EXTENT.x1 - EXTENT.x0, bh = EXTENT.y1 - EXTENT.y0;
+  static fit(w, h, ext = EXTENT) {
+    const bw = ext.x1 - ext.x0, bh = ext.y1 - ext.y0;
     return Math.min(w / bw, h / bh) >= Math.min(w / bh, h / bw) ? 'h' : 'v';
   }
 
@@ -241,21 +250,33 @@ export class BoardView {
     }
     // The XIAO and the sensor talking: messages along SDA and SCL, when both are wired right.
     const sensor = (scene.parts || []).find(p => p.type === 'sensor'), xiao = (scene.parts || []).find(p => p.type === 'xiao');
-    if (scene.bus && sensor && xiao && sensorStatus(scene.parts).ok) {
+    const oled = (scene.parts || []).find(p => p.type === 'oled');
+    const tags = [];
+    if (scene.bus && xiao) {
       const xp = Object.fromEntries(xiaoPins(xiao.col).map(q => [q.name, q.hole]));
-      const sp = Object.fromEntries(sensorPins(sensor.col, sensor.row).map(q => [q.name, q.hole]));
-      for (const [name, pin] of [['SDA', 'D4'], ['SCL', 'D5']]) {
-        const route = wireRoute(scene.parts, xp[pin], sp[name]);
-        if (!route) continue;
-        const pts = this.flowPath(route, xp[pin], sp[name]).map(p => p.join(',')).join(' ');
-        el('polyline', { points: pts, class: 'bus-path bus-' + name.toLowerCase() }, this.gFlow);
-        el('polyline', { points: pts, class: 'bus-dots bus-' + name.toLowerCase() }, this.gFlow);
+      const talk = [];
+      if (sensor && sensorStatus(scene.parts).ok) talk.push([Object.fromEntries(sensorPins(sensor.col, sensor.row).map(q => [q.name, q.hole])), '0x76', 'sensor']);
+      if (oled && screenStatus(scene.parts).ok) talk.push([Object.fromEntries(oledPins(oled).map(q => [q.name, q.hole])), '0x3C', 'screen']);
+      for (const [pins, address, who] of talk) {
+        for (const [name, pin] of [['SDA', 'D4'], ['SCL', 'D5']]) {
+          const route = wireRoute(scene.parts, xp[pin], pins[name]);
+          if (!route) continue;
+          const pts = this.flowPath(route, xp[pin], pins[name]).map(p => p.join(',')).join(' ');
+          el('polyline', { points: pts, class: 'bus-path bus-' + name.toLowerCase() }, this.gFlow);
+          el('polyline', { points: pts, class: 'bus-dots bus-' + name.toLowerCase() }, this.gFlow);
+        }
+        // Each device answers to its own address, like a house number on the street.
+        if (talk.length > 1) {
+          const h = hole(pins.SDA);
+          tags.push([h.x + (who === 'sensor' ? 1.4 : 1.6), h.y + (who === 'sensor' ? 1.6 : -1.2), address, 'address ' + who]);
+        }
       }
     }
 
     this.gMarks.replaceChildren();
     for (const m of scene.marks || []) this.mark(m.hole, m.kind);
     for (const n of scene.notes || []) this.note(n.at[0], n.at[1], n.text, n.tone);
+    for (const t of tags) this.note(...t);
     return r;
   }
 
@@ -326,7 +347,7 @@ export class BoardView {
     const m = this.svg.getScreenCTM();
     if (!m) return null;
     const p = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(m.inverse());
-    const [x, y] = this.orient === 'h' ? [p.x / P, p.y / P] : [p.y / P, p.x / P];
+    const [x, y] = this.orient === 'h' ? [p.x / P, p.y / P] : [p.y / P, -p.x / P];
     return holeNear(x, y, reach);
   }
 
@@ -335,6 +356,7 @@ export class BoardView {
     if (p.type === 'chip') return this.drawChip(p, g);
     if (p.type === 'xiao') return this.drawXiao(p, g);
     if (p.type === 'sensor') return this.drawSensor(p, g);
+    if (p.type === 'oled') return this.drawOled(p, g);
     const A = hole(p.a), Bh = hole(p.b);
     const [ax, ay] = this.pt(A.x, A.y), [bx, by] = this.pt(Bh.x, Bh.y);
     const mx = (ax + bx) / 2, my = (ay + by) / 2;
@@ -435,6 +457,43 @@ export class BoardView {
       el('circle', { cx, cy, r: P * 0.24, class: 'xiao-pad' }, g);
       this.text(h.x, h.y + 0.78, q.name, { class: 'xiao-pin' }, g);
     }
+  }
+
+  // A 0.96 inch OLED: too wide for a half-size board, so it sits above it on four jumper leads.
+  // shows: a data: URL of what's on the screen right now, or nothing for a dark screen.
+  drawOled(p, g, shows) {
+    const x0 = OLED_X + 1.5; // the middle of its four pins
+    this.rect(x0 - 5.35, -12.75, x0 + 5.35, -2.05, { rx: P * 0.35, class: 'oled-pcb' }, g);
+    for (const [cx, cy] of [[-4.6, -12.0], [4.6, -12.0], [-4.6, -2.8], [4.6, -2.8]]) {
+      const [a, b] = this.pt(x0 + cx, cy);
+      el('circle', { cx: a, cy: b, r: P * 0.32, class: 'oled-hole' }, g);
+    }
+    this.rect(x0 - 4.9, -11.6, x0 + 4.9, -4.35, { rx: P * 0.1, class: 'oled-glass' }, g);
+    // The 128 x 64 pixels, 2:1, turned with the board when it stands up.
+    const r = this.svgRect([x0 - 4.3, -10.35, x0 + 4.3, -6.05]);
+    const img = el('image', { x: r.x, y: r.y, width: r.w, height: r.h, class: 'oled-pixels', preserveAspectRatio: 'none' }, g);
+    if (this.orient === 'v') {
+      // drawn unturned at the same middle, then turned a quarter clockwise like the board
+      const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+      Object.entries({ x: cx - r.h / 2, y: cy - r.w / 2, width: r.h, height: r.w, transform: `rotate(90 ${cx} ${cy})` }).forEach(([k, v]) => img.setAttribute(k, v));
+    }
+    this.screenImg = img;
+    if (this.screen) img.setAttribute('href', this.screen);
+    for (const q of oledPins(p)) {
+      const h = hole(q.hole), to = hole(q.lead);
+      const [ax, ay] = this.pt(h.x, h.y), [bx, by] = this.pt(to.x, to.y);
+      el('line', { x1: ax, y1: ay, x2: bx, y2: by, stroke: { GND: '#2a2a2c', VCC: '#d8343a', SCL: '#e8b923', SDA: '#2f6fd6' }[q.name], class: 'wire lead' }, g);
+      el('line', { x1: ax, y1: ay, x2: bx, y2: by, class: 'wire-shine' }, g);
+      el('circle', { cx: bx, cy: by, r: P * 0.12, class: 'pin' }, g);
+      el('circle', { cx: ax, cy: ay, r: P * 0.26, class: 'xiao-pad' }, g);
+      this.text(h.x, h.y - 0.8, q.name, { class: 'xiao-pin' }, g);
+    }
+  }
+
+  // Put new pixels on the screen without redrawing the board.
+  setScreen(url) {
+    this.screen = url;
+    if (this.screenImg) url ? this.screenImg.setAttribute('href', url) : this.screenImg.removeAttribute('href');
   }
 
   drawChip(p, g) {

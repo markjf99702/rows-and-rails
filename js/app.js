@@ -1,13 +1,14 @@
-import { HOLES, hole, netOf, netHoles, describeNet, describeHole, cap, setSides, sided, partHoles, whatsIn } from './board.js';
-import { sensorStatus, analyze } from './circuit.js';
+import { HOLES, hole, netOf, netHoles, describeNet, describeHole, cap, setSides, sided, partHoles, whatsIn, EXTENT } from './board.js';
+import { sensorStatus, screenStatus, analyze } from './circuit.js';
 import { BoardView, WIRE_CYCLE } from './render.js';
-import { STEPS, MISTAKES, LED_CIRCUIT, MISTAKES2, XIAO_CIRCUIT, xiao, bme, HOT, SKETCH } from './lessons.js';
+import { STEPS, MISTAKES, LED_CIRCUIT, MISTAKES2, XIAO_CIRCUIT, xiao, bme, HOT, SKETCH, MISTAKES3, SCREEN_CIRCUIT, oled, EXTENT3, SKETCH3 } from './lessons.js';
 
 const $ = s => document.querySelector(s);
 const svg = $('#board');
 const view = new BoardView(svg);
 const KEY = 'rows-and-rails.v1';
 const KEY2 = 'rows-and-rails.xiao.v1';
+const KEY3 = 'rows-and-rails.screen.v1';
 
 const state = {
   step: 0,
@@ -16,7 +17,9 @@ const state = {
   tab: 0, fixed: false,
   quiz: null,
   sb: { parts: load(), tool: 'look', pending: null },
-  ch: { parts: loadCh(), tool: 'look', pending: null },
+  ch: { parts: loadCh(KEY2, [xiao, bme]), tool: 'look', pending: null },
+  ch3: { parts: loadCh(KEY3, [xiao, bme, oled]), tool: 'look', pending: null },
+  hum: 45,        // and the humidity, in level 3
   high: true,     // D10, in the "LED on a pin" step
   temp: 22,       // what the sensor reads in "Run the code"
   serial: [],
@@ -29,12 +32,12 @@ function load() {
   } catch {}
   return [{ type: 'battery' }];
 }
-function loadCh() {
+function loadCh(key, fixed) {
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY2));
-    if (Array.isArray(saved?.parts)) return [xiao, bme, ...saved.parts.filter(validParts)];
+    const saved = JSON.parse(localStorage.getItem(key));
+    if (Array.isArray(saved?.parts)) return [...fixed, ...saved.parts.filter(validParts)];
   } catch {}
-  return [xiao, bme];
+  return [...fixed];
 }
 function validParts(p) {
   try { hole(p.a); hole(p.b); return ['wire', 'resistor', 'led'].includes(p.type); } catch { return false; }
@@ -43,14 +46,15 @@ function save() {
   try {
     localStorage.setItem(KEY, JSON.stringify({ parts: state.sb.parts.filter(p => p.type !== 'battery') }));
     localStorage.setItem(KEY2, JSON.stringify({ parts: state.ch.parts.filter(p => !p.fixed) }));
+    localStorage.setItem(KEY3, JSON.stringify({ parts: state.ch3.parts.filter(p => !p.fixed) }));
   } catch {}
 }
 
 // The board you're building on: level 1's free build, or level 2's challenge.
-const box = () => (step().mode === 'challenge' ? state.ch : state.sb);
+const box = () => (step().mode !== 'challenge' ? state.sb : level() === 3 ? state.ch3 : state.ch);
 const level = (i = state.step) => STEPS[i].level || 1;
 const inLevel = l => STEPS.map((s, i) => i).filter(i => level(i) === l);
-const mistakes = () => (level() === 2 ? MISTAKES2 : MISTAKES);
+const mistakes = () => [MISTAKES, MISTAKES2, MISTAKES3][level() - 1];
 const sensorOK = () => sensorStatus(XIAO_CIRCUIT).ok;
 
 const step = () => STEPS[state.step];
@@ -59,12 +63,13 @@ const step = () => STEPS[state.step];
 
 function scene() {
   const s = step();
-  const sc = { parts: s.parts || [], highlights: [...(s.highlights || [])], notes: (s.notes || []).map(n => ({ ...n, text: sided(n.text) })), marks: [], xray: state.xray ?? s.xray, bus: !!s.bus, high: level() === 2 };
+  const sc = { parts: s.parts || [], highlights: [...(s.highlights || [])], notes: (s.notes || []).map(n => ({ ...n, text: sided(n.text) })), marks: [], xray: state.xray ?? s.xray, bus: !!s.bus, high: level() >= 2 };
   if (s.mode === 'pin') sc.high = state.high;
   if (s.mode === 'run') sc.high = sensorOK() && state.temp > HOT;
   if (s.mode === 'mistakes') {
     const m = mistakes()[state.tab];
     sc.parts = state.fixed ? m.fix : m.parts;
+    if (!state.fixed && m.address) sc.address = m.address;
     sc.highlights = state.fixed ? [] : [...(m.highlights || [])];
   } else if (s.mode === 'quiz') {
     const q = state.quiz;
@@ -92,6 +97,7 @@ const lookMode = () => { const m = step().mode; return !['quiz', 'sandbox', 'cha
 
 function draw() {
   const sc = scene();
+  view.screen = level() === 3 ? screenFrame(sc.parts, sc.address) : null;
   const r = view.draw(sc);
   const xr = sc.xray === 'on';
   $('#xray').setAttribute('aria-pressed', String(xr));
@@ -109,7 +115,7 @@ function render() {
   $('#title').textContent = s.title;
   $('#body').innerHTML = sided(s.body);
   $('#back').disabled = state.step === 0;
-  $('#next').textContent = state.step === STEPS.length - 1 ? 'Restart' : level(state.step + 1) !== level() ? 'Level 2' : 'Next';
+  $('#next').textContent = state.step === STEPS.length - 1 ? 'Restart' : level(state.step + 1) !== level() ? `Level ${level(state.step + 1)}` : 'Next';
   $('#dots').replaceChildren(...steps.map(i => h('li', {}, h('button', {
     title: STEPS[i].title, 'aria-label': `Step ${steps.indexOf(i) + 1}: ${STEPS[i].title}`, 'aria-current': i === state.step ? 'step' : 'false', onclick: () => go(i),
   }))));
@@ -164,7 +170,7 @@ function mistakesUI(ex, r) {
     role: 'tab', 'aria-selected': String(i === state.tab), class: 'tab',
     onclick: () => { state.tab = i; state.fixed = false; state.inspect = null; render(); applyFocus(); },
   }, mm.label)));
-  ex.append(tabs, ...(level() === 2 ? verdict2(view.scene.parts, r) : [verdict(r)]).map(([tone, say]) => h('p', { class: 'verdict ' + tone }, say)),
+  ex.append(tabs, ...(level() === 3 ? verdict3(view.scene, r) : level() === 2 ? verdict2(view.scene.parts, r) : [verdict(r)]).map(([tone, say]) => h('p', { class: 'verdict ' + tone }, say)),
     h('p', {}, sided(state.fixed ? (m.fixText || 'Fixed. Compare it with the broken one to spot the difference.') : m.text)),
     h('button', { class: 'btn', onclick: () => { state.fixed = !state.fixed; render(); } }, state.fixed ? 'Show the mistake again' : 'Show the fix'));
 }
@@ -183,6 +189,64 @@ function verdict2(parts, r) {
   return out;
 }
 
+// Level 3: does the screen show the reading?
+function verdict3(sc, r) {
+  if (r.short) return [['bad', 'Short circuit: 3V3 is wired straight to GND.']];
+  const st = screenStatus(sc.parts);
+  if (st.items.some(i => i.danger)) return [['bad', 'The screen stays dark, and power backwards can kill it.']];
+  if (!st.ok) return [['bad', 'The screen stays dark.'], ...(sensorStatus(sc.parts).ok ? [['good', 'The sensor still answers.']] : [])];
+  if (sc.address && sc.address !== 0x3C) return [['bad', 'The screen stays dark: nobody answers at 0x' + sc.address.toString(16).toUpperCase() + '.']];
+  return [['good', 'The screen shows the reading.']];
+}
+
+// What's on the screen: the sketch's own layout, drawn into 128 x 64 pixels that are either on or off.
+const pixels = document.createElement('canvas');
+pixels.width = 128; pixels.height = 64;
+function screenFrame(parts, address = 0x3C) {
+  const st = screenStatus(parts);
+  if (!st || !st.ok || address !== 0x3C) return null;
+  const ctx = pixels.getContext('2d', { willReadFrequently: true });
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 128, 64);
+  ctx.fillStyle = '#fff'; ctx.textBaseline = 'top';
+  const small = (text, y) => { ctx.font = '500 9px "Plex Mono", monospace'; ctx.fillText(text, 0, y); };
+  if (!sensorStatus(parts).ok) small('No BME280 found', 0);
+  else {
+    small('Temperature', 0);
+    ctx.font = '500 27px "Plex Mono", monospace';
+    ctx.fillText(state.temp.toFixed(1), 0, 17);
+    small(`Humidity ${Math.round(state.hum)}%`, 54);
+  }
+  const img = ctx.getImageData(0, 0, 128, 64), d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const on = d[i] > 110;
+    d[i] = on ? 214 : 0; d[i + 1] = on ? 240 : 0; d[i + 2] = on ? 255 : 0; d[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return pixels.toDataURL();
+}
+
+// A screen with nothing on it: every pixel off.
+let dark = null;
+function darkScreen() {
+  if (!dark) {
+    const c = document.createElement('canvas');
+    c.width = 128; c.height = 64;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 128, 64);
+    dark = c.toDataURL();
+  }
+  return dark;
+}
+
+// New pixels for the screen on the board and the big copy in the panel, without redrawing anything else.
+function refreshScreen() {
+  if (level() !== 3) return;
+  const url = screenFrame(view.scene.parts, view.scene.address);
+  view.setScreen(url);
+  const big = $('#oled');
+  if (big) big.src = url || darkScreen();
+}
+
 // ----- Level 2: the pin, the code, the challenge -----
 
 function pinUI(ex) {
@@ -197,14 +261,16 @@ function runUI(ex) {
   const ok = sensorOK();
   const slider = h('input', { type: 'range', id: 'temp', min: '15', max: '35', step: '0.1', value: String(state.temp), 'aria-label': 'Temperature' });
   const readout = h('span', { class: 'temp' }, `${state.temp.toFixed(1)} °C`);
-  slider.addEventListener('input', () => { state.temp = +slider.value; clearInterval(breath); readout.textContent = `${state.temp.toFixed(1)} °C`; draw(); });
+  slider.addEventListener('input', () => { state.temp = +slider.value; clearInterval(breath); readout.textContent = `${state.temp.toFixed(1)} °C`; draw(); refreshScreen(); });
   ex.append(
     h('label', { class: 'slider', for: 'temp' }, h('span', {}, 'Temperature'), readout),
     slider,
     h('div', { class: 'row' }, h('button', { class: 'btn', onclick: breathe }, 'Breathe on it')),
     h('p', { class: 'verdict ' + (state.temp > HOT ? 'good' : '') }, state.temp > HOT ? `Above ${HOT} °C: D10 is HIGH and the LED is on.` : `Below ${HOT} °C: D10 is LOW and the LED is off.`),
-    h('p', { class: 'serial-label' }, 'Serial Monitor'),
-    h('pre', { class: 'serial', id: 'serial', 'aria-live': 'off' }, ok ? state.serial.join('\n') : 'Could not find a BME280 sensor'));
+    ...(level() === 3
+      ? [h('p', { class: 'serial-label' }, 'The screen'), h('div', { class: 'oled-preview' }, h('img', { id: 'oled', alt: 'What the screen shows: the temperature in large digits, with the humidity underneath' }))]
+      : [h('p', { class: 'serial-label' }, 'Serial Monitor'), h('pre', { class: 'serial', id: 'serial', 'aria-live': 'off' }, ok ? state.serial.join('\n') : 'Could not find a BME280 sensor')]));
+  refreshScreen();
   const pre = $('#serial');
   if (pre) pre.scrollTop = pre.scrollHeight;
 }
@@ -212,12 +278,13 @@ function runUI(ex) {
 // Your breath is warm and damp: the reading climbs a few degrees, then drifts back.
 function breathe() {
   clearInterval(breath);
-  const start = state.temp, peak = Math.min(35, Math.max(start, 22) + 7);
+  const start = state.temp, peak = Math.min(35, Math.max(start, 22) + 7), hum0 = 45;
   let t = 0;
   breath = setInterval(() => {
     t += 0.1;
     state.temp = t < 1.5 ? start + (peak - start) * (t / 1.5) : Math.max(start, peak - (peak - start) * ((t - 1.5) / 6));
-    if (t > 7.5) { state.temp = start; clearInterval(breath); }
+    state.hum = hum0 + 38 * (state.temp - start) / Math.max(0.1, peak - start); // breath is damp too
+    if (t > 7.5) { state.temp = start; state.hum = hum0; clearInterval(breath); }
     if (step().mode !== 'run') { clearInterval(breath); return; }
     const s = $('#temp'), out = $('.temp');
     if (s) s.value = String(state.temp);
@@ -228,12 +295,14 @@ function breathe() {
       v.textContent = state.temp > HOT ? `Above ${HOT} °C: D10 is HIGH and the LED is on.` : `Below ${HOT} °C: D10 is LOW and the LED is off.`;
     }
     draw();
+    refreshScreen();
   }, 100);
 }
 
 // The sketch prints once a second, like the real thing.
 function tick() {
   if (step().mode !== 'run' || !sensorOK()) return;
+  if (level() === 3) { refreshScreen(); return; }
   const t = state.temp + (Math.random() - 0.5) * 0.08;
   state.serial.push(`Temperature: ${t.toFixed(1)} C`);
   if (state.serial.length > 40) state.serial.shift();
@@ -255,22 +324,27 @@ function copyCode(btn) {
 }
 
 function challengeUI(ex, r) {
-  const parts = state.ch.parts;
+  const parts = box().parts, l3 = level() === 3;
   const st = sensorStatus(parts);
+  const sc = l3 ? screenStatus(parts) : null;
   const led = r.leds.find(l => l.by.includes('D10') && l.state === 'lit');
   const burned = r.leds.find(l => l.state === 'burned');
   const items = [
     ...st.items.map(i => ({ ok: i.ok && !i.warn, warn: i.warn, label: { VIN: 'Sensor VIN gets 3.3 V', GND: 'Sensor GND shares the XIAO’s ground', SDA: 'SDA goes to D4', SCL: 'SCL goes to D5' }[i.pin], say: i.ok && !i.warn ? '' : i.say })),
+    ...(sc ? sc.items.map(i => ({ ok: i.ok && !i.warn, warn: i.warn, label: { VCC: 'Screen VCC gets 3.3 V', GND: 'Screen GND shares the ground', SDA: 'Screen SDA reaches D4', SCL: 'Screen SCL reaches D5' }[i.pin], say: i.ok && !i.warn ? '' : i.say })) : []),
     { ok: !!led, label: 'D10 lights an LED through a resistor', say: led ? '' : burned ? 'The LED has no resistor in its loop: it would burn out.' : !r.leds.length ? 'Add a resistor from D10’s row, then an LED, then a wire to −.' : ledHint(r.leds[0]) },
     { ok: !r.short, label: 'No short circuits', say: r.short ? '3V3 or 5V is wired straight to GND. Remove that wire.' : '' },
   ];
   const done = items.every(i => i.ok);
   ex.append(h('ul', { class: 'checklist' }, ...items.map(i => h('li', { class: i.ok ? 'ok' : i.warn ? 'warn' : '' },
     h('span', { class: 'tick', 'aria-hidden': 'true' }, i.ok ? '✓' : i.warn ? '!' : ''), h('span', {}, h('b', {}, i.label), i.say ? h('br') : '', i.say)))));
-  if (done) ex.append(h('p', { class: 'verdict good' }, 'All wired. The sensor answers and D10 lights the LED. That’s a real circuit you could build tonight.'));
+  if (done) ex.append(h('p', { class: 'verdict good' }, l3
+    ? 'All wired. The screen shows the temperature, the sensor answers and D10 lights the LED: a little weather station.'
+    : 'All wired. The sensor answers and D10 lights the LED. That’s a real circuit you could build tonight.'));
+  const answer = l3 ? SCREEN_CIRCUIT : XIAO_CIRCUIT, fixed = l3 ? [xiao, bme, oled] : [xiao, bme];
   ex.append(h('div', { class: 'row' },
-    h('button', { class: 'btn quiet', onclick: () => { state.ch.parts = XIAO_CIRCUIT.map(p => ({ ...p })); state.ch.pending = null; save(); render(); } }, 'Show me the answer'),
-    h('button', { class: 'btn quiet', onclick: () => { state.ch.parts = [xiao, bme]; state.ch.pending = null; save(); render(); } }, 'Start again')));
+    h('button', { class: 'btn quiet', onclick: () => { box().parts = answer.map(p => (p.fixed ? p : { ...p })); box().pending = null; save(); render(); } }, 'Show me the answer'),
+    h('button', { class: 'btn quiet', onclick: () => { box().parts = [...fixed]; box().pending = null; save(); render(); } }, 'Start again')));
 }
 
 function ledHint(l) {
@@ -534,6 +608,8 @@ function go(i, push = true) {
   if (step().mode === 'quiz') newQuiz();
   if (step().mode === 'pin') state.high = true;
   if (push) history.replaceState(null, '', '#' + step().id);
+  view.setExtent(level() === 3 ? EXTENT3 : EXTENT);
+  if (fitBoard()) applyFocus(false);
   render();
   applyFocus();
   $('.panel-scroll').scrollTop = 0;
@@ -563,7 +639,7 @@ window.addEventListener('hashchange', () => {
 const wrap = $('.board-wrap');
 function fitBoard() {
   const { width, height } = wrap.getBoundingClientRect();
-  const o = BoardView.fit(width || 800, height || 500);
+  const o = BoardView.fit(width || 800, height || 500, view.ext);
   setSides(o);
   return view.setOrient(o);
 }

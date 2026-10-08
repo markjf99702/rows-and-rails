@@ -30,8 +30,12 @@ for (const [rail, y] of Object.entries(RAILS)) {
   }
 }
 for (const t of ['BAT+', 'BAT-']) holes.set(t, { id: t, ...BATTERY[t], kind: 'battery', net: t.toLowerCase() });
+// Level 3's screen sits off the board, above it, on four jumper leads. These are the ends of its pins.
+export const OLED_PIN_NAMES = ['GND', 'VCC', 'SCL', 'SDA'];
+export const OLED_X = 19; // where its GND pin is; the others follow one hole apart
+OLED_PIN_NAMES.forEach((n, i) => holes.set('OLED-' + n, { id: 'OLED-' + n, x: OLED_X + i, y: -2.75, kind: 'oled', net: 'oled-' + n.toLowerCase() }));
 
-export const HOLES = [...holes.values()].filter(h => h.kind !== 'battery');
+export const HOLES = [...holes.values()].filter(h => h.kind === 'main' || h.kind === 'rail');
 
 export function hole(id) {
   const h = holes.get(id);
@@ -60,10 +64,10 @@ export function holeNear(x, y, reach = 0.75) {
   return best;
 }
 
-// The rails are at the top and bottom when the board lies on its side, and on the left and right
-// when it stands up on a phone. Everything that names them asks here.
+// The rails are at the top and bottom when the board lies on its side, and on the right and left
+// when it stands up on a phone (turned a quarter clockwise, so the top rails end up on the right). Everything that names them asks here.
 let SIDES = { T: 'top', B: 'bottom' };
-export function setSides(orient) { SIDES = orient === 'v' ? { T: 'left', B: 'right' } : { T: 'top', B: 'bottom' }; }
+export function setSides(orient) { SIDES = orient === 'v' ? { T: 'right', B: 'left' } : { T: 'top', B: 'bottom' }; }
 export const side = k => SIDES[k];
 // "{T}" and "{B}" in lesson text become the right words for the way the board is showing.
 export const sided = s => s.replace(/\{T\}/g, SIDES.T).replace(/\{B\}/g, SIDES.B).replace(/\{Tc\}/g, cap(SIDES.T)).replace(/\{Bc\}/g, cap(SIDES.B));
@@ -100,8 +104,12 @@ export function xiaoPins(col) {
 export const SENSOR_PINS = ['VIN', 'GND', 'SCL', 'SDA'];
 export function sensorPins(col, row = 'h') { return SENSOR_PINS.map((name, i) => ({ name, hole: row + (col + i) })); }
 
+// The screen's pins and the board holes its leads plug into.
+export const oledPins = p => OLED_PIN_NAMES.map(name => ({ name, hole: 'OLED-' + name, lead: p.leads[name] }));
+
 // Every hole a part fills: its legs or pins, and any it covers up.
 export function partHoles(p) {
+  if (p.type === 'oled') return Object.values(p.leads);
   if (p.type === 'battery') return [BATTERY.plus, BATTERY.minus];
   if (p.type === 'xiao') return [...xiaoPins(p.col).map(q => q.hole), ...[0, 1, 2, 3, 4, 5, 6].flatMap(i => ['e', 'f', 'g'].map(l => l + (p.col + i)))];
   if (p.type === 'sensor') return [...sensorPins(p.col, p.row).map(q => q.hole), ...[0, 1, 2, 3].flatMap(i => ['i', 'j'].map(l => l + (p.col + i)))];
@@ -120,6 +128,9 @@ export function whatsIn(parts, id) {
       const pin = sensorPins(p.col, p.row).find(q => q.hole === id);
       if (pin) return `the sensor’s ${pin.name} pin`;
       if (partHoles(p).includes(id)) return 'nothing: it’s under the sensor board';
+    } else if (p.type === 'oled') {
+      const pin = oledPins(p).find(q => q.lead === id);
+      if (pin) return `the screen’s ${pin.name} lead`;
     } else if (p.type === 'battery') {
       if (id === BATTERY.plus) return 'the battery’s red lead (+)';
       if (id === BATTERY.minus) return 'the battery’s black lead (−)';

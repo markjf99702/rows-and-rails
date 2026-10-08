@@ -36,7 +36,8 @@ const tap = async (page, id) => { const [x, y] = await page.evaluate(id => rowsA
 for (const [name, hash, act] of [
   ['inside', 'rows', async p => { await p.click('#xray'); await tap(p, 'c17'); }],
   ['loop', 'loop'],
-  ['mistakes', 'mistakes', async p => { await p.click('.tab >> nth=2'); }],
+  ['xiao', 'xled'],
+  ['screen', 'show', async p => { await p.evaluate(() => { const s = document.querySelector('#temp'); s.value = '27.4'; s.dispatchEvent(new Event('input')); }); }],
 ]) {
   const page = await open({ width: 390, height: 844 }, 2, hash);
   if (act) { await act(page); await page.waitForTimeout(900); }
@@ -46,9 +47,12 @@ for (const [name, hash, act] of [
 
 // Link preview, 1200 x 630: the name on the left, the lit-up board from the app on the right.
 {
-  const page = await open({ width: 1500, height: 960 }, 2, 'loop');
-  const board = await page.locator('#board').boundingBox();
-  const shot = await page.screenshot({ clip: { x: board.x, y: board.y + 70, width: board.width, height: board.height - 140 }, omitBackground: true });
+  const page = await open({ width: 1500, height: 1100 }, 2, 'show');
+  await page.evaluate(() => { const s = document.querySelector('#temp'); s.value = '27.4'; s.dispatchEvent(new Event('input')); });
+  await page.addStyleTag({ content: '.zoom { display: none !important; }' });
+  await page.waitForTimeout(600);
+  const box = await page.evaluate(() => { const r = document.querySelector('#board').getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; });
+  const shot = await page.screenshot({ clip: box, omitBackground: true });
   await page.context().close();
   const font = (await readFile(join(root, 'fonts/figtree.woff2'))).toString('base64');
   const card = await (await browser.newContext({ viewport: { width: 1200, height: 630 } })).newPage();
@@ -58,8 +62,8 @@ for (const [name, hash, act] of [
     .t { position: absolute; left: 70px; top: 190px; width: 420px; }
     h1 { font-size: 78px; line-height: .98; margin: 0 0 26px; font-weight: 700; letter-spacing: -.01em; }
     p { font-size: 31px; line-height: 1.3; margin: 0; color: #c9d8d4; }
-    img { position: absolute; left: 470px; top: 50%; transform: translateY(-50%) rotate(-4deg); width: 820px; filter: drop-shadow(0 18px 30px rgba(0,0,0,.45)); }
-  </style><div class="t"><h1>Rows and Rails</h1><p>How a breadboard is wired inside, and your first LED.</p></div><img src="data:image/png;base64,${shot.toString('base64')}">`);
+    img { position: absolute; left: 500px; top: 50%; transform: translateY(-50%) rotate(-3deg); width: 690px; filter: drop-shadow(0 18px 30px rgba(0,0,0,.45)); }
+  </style><div class="t"><h1>Rows and Rails</h1><p>How a breadboard works, from a first LED to a XIAO weather station.</p></div><img src="data:image/png;base64,${shot.toString('base64')}">`);
   await card.evaluate(() => document.fonts.ready);
   await card.waitForTimeout(200);
   await card.screenshot({ path: join(root, 'og.png') });

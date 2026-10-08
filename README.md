@@ -2,20 +2,23 @@
 
 **Use it: [rows-and-rails.junkdrawer.works](https://rows-and-rails.junkdrawer.works/)**
 
-**A breadboard you can see inside.** Tap any hole to see which other holes it's joined to, switch the plastic to see-through to look at the metal clips underneath, then light an LED one part at a time with the current drawn flowing round the loop. It ends with the usual mistakes, a quick quiz and a board of your own to build on. Level 2 puts a XIAO ESP32C3 and a BME280 temperature sensor on the board: power from the XIAO, two I²C wires to the sensor, an LED on a pin, the Arduino sketch to run it, and a challenge to wire it all yourself.
+**A breadboard you can see inside.** Tap any hole to see which other holes it's joined to, switch the plastic to see-through to look at the metal clips underneath, then light an LED one part at a time with the current drawn flowing round the loop. It ends with the usual mistakes, a quick quiz and a board of your own to build on. Level 2 puts a XIAO ESP32C3 and a BME280 temperature sensor on the board: power from the XIAO, two I²C wires to the sensor, an LED on a pin, the Arduino sketch to run it, and a challenge to wire it all yourself. Level 3 adds a 0.96 inch OLED screen on the same two wires and turns it into a little weather station.
 
 <p align="center">
   <img src="docs/phone-inside.png" alt="The breadboard standing upright with its plastic see-through, showing a metal clip under every row of five holes; row 17 a to e is lit up in orange" width="250">
   &nbsp;
   <img src="docs/phone-loop.png" alt="A battery, a resistor, a lit red LED and a black wire on the board, with yellow dots tracing the current from the battery's plus, through each part, and back to minus" width="250">
   &nbsp;
-  <img src="docs/phone-mistakes.png" alt="The Why won't it light step: the wire back to the minus rail is plugged in on the far side of the middle gap, so the LED is dark" width="250">
+  <img src="docs/phone-xiao.png" alt="Level 2: the XIAO ESP32C3 across the middle gap with the purple BME280 sensor below it; white dots run along the blue SDA and yellow SCL wires and the LED on D10 is lit" width="250">
+  &nbsp;
+  <img src="docs/phone-screen.png" alt="Level 3: an OLED screen beside the board on four jumper leads, showing Temperature 27.4 and Humidity 45%, sharing the SDA and SCL wires with the sensor" width="250">
 </p>
 
 ## How it works
 
 - **Level 1: twelve short steps.** Meet the board, look under the plastic, rows of five, the middle gap, the power rails, then build an LED circuit in four parts: power, resistor, LED, and the wire that closes the loop.
 - **Level 2: a microcontroller and a sensor.** Eight steps with a Seeed Studio XIAO ESP32C3 (the S3 and C6 have the same pins) and a BME280 breakout. Wire 3V3 and GND to the rails, the sensor's SDA to D4 and SCL to D5, and an LED on D10. Moving dots show the messages on the I²C wires. **Run the code** has the real Arduino sketch to copy, a temperature to drag (or breathe on), a serial monitor, and the LED switching on above 26 °C. **Wire it yourself** starts with just the two boards and ticks off a checklist as you place each wire.
+- **Level 3: a screen on the same two wires.** Five steps with an SSD1306 OLED. It's too wide for the board, so it sits above it on four jumper leads; two short jumpers put it on the sensor's SDA and SCL rows. Each device answers to its own address (0x76 and 0x3C). **Show the temperature** draws the sketch's real screen layout pixel by pixel as you drag the temperature, **Blank screen?** covers four reasons it stays dark, and **Wire the whole thing** is the final challenge.
 - **Tap any hole.** Every hole on the same clip lights up, and the line above the board names them.
 - **See inside.** Fades the plastic so the metal clips show. Some steps turn it on for you.
 - **A real check, not a picture.** Every circuit on the board goes through a small circuit checker (`js/circuit.js`). It finds each loop from the battery's + (or the XIAO's 3V3 and D10 pins) back to −, knows an LED only passes current one way, and catches the usual faults: LED backwards, both legs on one clip, an open loop, no resistor (the LED burns out), and a short circuit.
@@ -34,7 +37,7 @@ It's a static site: plain HTML, CSS and JavaScript, with no build step.
 ```sh
 npx serve .                   # or any static file server, then open the printed address
 npm test                      # the circuit checker's unit tests, then the whole page in Chromium (needs Playwright)
-node tools/screenshots.mjs    # redraws docs/*.png and og.png
+node tools/screenshots.mjs    # redraws docs/*.png and og.png (Pillow shrinks them, if it's there)
 node tools/make-icons.mjs     # redraws the PNG icons from icon.svg
 node tools/build.mjs          # one self-contained file, dist/artifact.html, for sharing as a single page
 ```

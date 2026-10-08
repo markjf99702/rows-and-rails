@@ -329,3 +329,119 @@ export const MISTAKES2 = [
   },
 ];
 for (const m of MISTAKES2) if (!m.fix) m.fix = XIAO_CIRCUIT;
+
+// ----- Level 3: a screen on the same two wires -----
+
+export const oled = { type: 'oled', fixed: true, leads: { GND: 'T-20', VCC: 'T+21', SCL: 'a22', SDA: 'a23' } };
+const jscl = { type: 'wire', a: 'e22', b: 'f19', color: 'yellow' };
+const jsda = { type: 'wire', a: 'e23', b: 'g20', color: 'blue' };
+export const SCREEN_CIRCUIT = [...XIAO_CIRCUIT, oled, jscl, jsda];
+// The screen hangs above the board, so level 3 shows more room above it.
+export const EXTENT3 = { x0: -1.9, x1: 30.9, y0: -13.3, y1: 18.5 };
+const SCREEN_AREA = [1, -13.3, 28, 16];
+
+export const SKETCH3 = `#include <Wire.h>
+#include <Adafruit_BME280.h>
+#include <Adafruit_SSD1306.h>
+
+Adafruit_BME280 bme;
+Adafruit_SSD1306 screen(128, 64, &Wire, -1);
+const int LED_PIN = D10;
+const float HOT = ${HOT}.0;     // degrees C
+bool found;
+
+void setup() {
+  pinMode(LED_PIN, OUTPUT);
+  Wire.begin();                               // SDA on D4, SCL on D5
+  screen.begin(SSD1306_SWITCHCAPVCC, 0x3C);   // the screen's address
+  screen.setTextColor(SSD1306_WHITE);
+  found = bme.begin(0x76);                    // the sensor's address
+}
+
+void loop() {
+  screen.clearDisplay();
+  screen.setTextSize(1);
+  screen.setCursor(0, 0);
+  if (!found) {
+    screen.print("No BME280 found");
+  } else {
+    float t = bme.readTemperature();
+    float h = bme.readHumidity();
+    screen.print("Temperature");
+    screen.setTextSize(3);
+    screen.setCursor(0, 16);
+    screen.print(t, 1);
+    screen.setTextSize(1);
+    screen.setCursor(0, 54);
+    screen.print("Humidity ");
+    screen.print(h, 0);
+    screen.print("%");
+    digitalWrite(LED_PIN, t > HOT ? HIGH : LOW);
+  }
+  screen.display();
+  delay(1000);
+}`;
+
+STEPS.push(
+  {
+    id: 'screen', level: 3, title: 'Add a screen', xray: 'off', focus: SCREEN_AREA,
+    parts: [...XIAO_CIRCUIT, oled],
+    highlights: [{ net: '22ae', tone: 'scl' }, { net: '23ae', tone: 'sda' }],
+    body: `<p>This is a <b>0.96 inch OLED</b>: 128 by 64 tiny lights that glow on their own, run by an SSD1306 chip. It talks I²C too, so it needs the same four connections as the sensor.</p>
+      <p>It's wider than the board, so it sits above it on four <b>female-to-male jumper wires</b>. <b class="minus">GND</b> and <b class="plus">VCC</b> go straight into the rails. <b class="scl">SCL</b> and <b class="sda">SDA</b> go into two empty rows, 22 and 23.</p>
+      <p class="hint">Look at the pin order: the screen goes GND, VCC, SCL, SDA, and the sensor goes VIN, GND, SCL, SDA. Always follow the labels, not where a pin sits.</p>`,
+  },
+  {
+    id: 'bus', level: 3, title: 'Share the two wires', xray: 'peek', focus: SCREEN_AREA, bus: true,
+    parts: SCREEN_CIRCUIT,
+    body: `<p>Two short jumpers join row 22 to the sensor's SCL row and row 23 to its SDA row. Now the screen and the sensor hang off the same two wires.</p>
+      <p>That's what I²C is for: one pair of wires, lots of devices. The XIAO calls each one by its <b>address</b>, like a house number on a street. The sensor is <code>0x76</code> and the screen is <code>0x3C</code>, so they never answer for each other.</p>
+      <p class="hint">Two devices with the same address can't share the wires. Many sensors have a pad or pin to change theirs.</p>`,
+  },
+  {
+    id: 'show', level: 3, title: 'Show the temperature', xray: 'off', focus: SCREEN_AREA, bus: true, mode: 'run',
+    parts: SCREEN_CIRCUIT,
+    body: `<p>The sketch now writes the reading on the screen instead of the Serial Monitor, and still turns the LED on above ${HOT} °C. Drag the temperature or breathe on the sensor and watch the screen.</p>
+      <details class="code"><summary>The code</summary><pre><code>${esc(SKETCH3)}</code></pre>
+        <button class="btn quiet copy" type="button">Copy the code</button>
+        <p class="hint">Install <b>Adafruit SSD1306</b> from the Library Manager (it brings Adafruit GFX with it) as well as Adafruit BME280. Some screens answer at <code>0x3D</code>: it's printed on the back.</p>
+      </details>`,
+  },
+  {
+    id: 'blank', level: 3, title: 'Blank screen?', xray: 'peek', focus: SCREEN_AREA, mode: 'mistakes', bus: true,
+    body: `<p>A screen that stays black is almost always one of these. Pick one, then show the fix.</p>`,
+  },
+  {
+    id: 'final', level: 3, title: 'Wire the whole thing', xray: 'off', focus: SCREEN_AREA, mode: 'challenge', bus: true,
+    body: `<p>The XIAO, the sensor and the screen with its leads are in place. Everything else is up to you: power, both devices on the bus, and the LED on D10.</p>
+      <p class="hint">Work outward from the XIAO: 3V3 and GND to the rails, then the sensor, then the jumpers to the screen's rows.</p>`,
+  },
+);
+
+const swap3 = (from, to) => SCREEN_CIRCUIT.map(q => (q === from ? to : q));
+
+export const MISTAKES3 = [
+  {
+    id: 'power-swapped', label: 'GND and VCC swapped',
+    parts: swap3(oled, { ...oled, leads: { ...oled.leads, GND: 'T+21', VCC: 'T-20' } }),
+    text: `The leads went in by position, copying the sensor, so the screen's GND is on + and its VCC on −. Power backwards can kill a screen for good. Follow the labels on its pins.`,
+  },
+  {
+    id: 'no-jumper', label: 'Missing jumper',
+    parts: SCREEN_CIRCUIT.filter(q => q !== jsda),
+    highlights: [{ net: '23ae', tone: 'bad' }],
+    text: `Row 23 has the screen's SDA lead in it but nothing joins it to the bus, so the screen never hears the XIAO. The sensor still works: it has its own SDA wire.`,
+  },
+  {
+    id: 'crossed', label: 'Jumpers crossed',
+    parts: swap3(jscl, { type: 'wire', a: 'e22', b: 'g20', color: 'yellow' }).map(q => (q === jsda ? { type: 'wire', a: 'e23', b: 'f19', color: 'blue' } : q)),
+    text: `The screen's SCL row is joined to the SDA line and its SDA row to SCL. The sensor is fine, but the screen gets clock on its data pin and stays dark.`,
+  },
+  {
+    id: 'address', label: 'Wrong address',
+    parts: SCREEN_CIRCUIT, address: 0x3D,
+    text: `The wiring is right, but the code calls the screen at 0x3D and this one answers at 0x3C, so nobody replies. Check the back of the screen and use the address printed there.`,
+    fixText: `The code calls 0x3C, the screen answers, and the reading appears.`,
+  },
+];
+for (const m of MISTAKES3) if (!m.fix) m.fix = SCREEN_CIRCUIT;

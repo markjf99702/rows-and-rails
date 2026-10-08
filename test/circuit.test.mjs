@@ -94,3 +94,26 @@ test('XIAO mistakes', () => {
   assert.equal(analyze(swap2(8, { type: 'resistor', a: 'b6', b: 'b10' }), { high: true }).leds[0].state, 'off', 'D9 isn’t what the code switches');
   assert.equal(analyze([...L2, { type: 'wire', a: 'T+20', b: 'T-20' }], { high: true }).short, true);
 });
+
+// ----- Level 3 -----
+import { screenStatus } from '../js/circuit.js';
+const oled = { type: 'oled', leads: { GND: 'T-20', VCC: 'T+21', SCL: 'a22', SDA: 'a23' } };
+const L3 = [...L2, oled, { type: 'wire', a: 'e22', b: 'f19' }, { type: 'wire', a: 'e23', b: 'g20' }];
+
+test('the screen shares the bus with the sensor', () => {
+  assert.equal(screenStatus(L3).ok, true);
+  assert.equal(sensorStatus(L3).ok, true);
+  assert.equal(analyze(L3, { high: true }).short, false);
+  assert.equal(analyze(L3, { high: true }).leds[0].state, 'lit');
+});
+
+test('screen mistakes', () => {
+  const swappedPower = L3.map(q => (q === oled ? { ...oled, leads: { ...oled.leads, GND: 'T+21', VCC: 'T-20' } } : q));
+  assert.equal(screenStatus(swappedPower).items[0].danger, true);
+  assert.equal(analyze(swappedPower, { high: true }).short, false, 'backwards power is not a short');
+  const noJumper = L3.slice(0, -1);
+  assert.equal(screenStatus(noJumper).items.find(i => i.pin === 'SDA').ok, false);
+  assert.equal(sensorStatus(noJumper).ok, true, 'the sensor still works');
+  const crossed = [...L3.slice(0, -2), { type: 'wire', a: 'e22', b: 'g20' }, { type: 'wire', a: 'e23', b: 'f19' }];
+  assert.match(screenStatus(crossed).items.find(i => i.pin === 'SDA').say, /swapped/);
+});
