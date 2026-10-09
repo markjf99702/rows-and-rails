@@ -2,8 +2,8 @@
 // The board lies across a wide screen ('h') and stands up on a tall one ('v'); everything is drawn
 // in board coordinates and mapped through pt(), so the same scene works either way.
 
-import { HOLES, hole, netHoles, RAILS, RAIL_X, COLS, LETTERS, ROW_Y, EXTENT, holeNear, xiaoPins, sensorPins, XIAO_ALSO, oledPins, OLED_X } from './board.js';
-import { analyze, sensorStatus, screenStatus, wireRoute } from './circuit.js';
+import { HOLES, hole, netHoles, RAILS, RAIL_X, COLS, LETTERS, ROW_Y, EXTENT, holeNear, xiaoPins, sensorPins, XIAO_ALSO, oledPins, OLED_X, soilPins, SOIL_X } from './board.js';
+import { analyze, sensorStatus, screenStatus, soilStatus, wireRoute } from './circuit.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const P = 10; // SVG units per hole spacing
@@ -253,6 +253,20 @@ export class BoardView {
     const sensor = (scene.parts || []).find(p => p.type === 'sensor'), xiao = (scene.parts || []).find(p => p.type === 'xiao');
     const oled = (scene.parts || []).find(p => p.type === 'oled');
     const tags = [];
+    // The soil sensor's voltage travelling down its AOUT lead to the XIAO's pin.
+    const soil = (scene.parts || []).find(p => p.type === 'soil');
+    if (scene.analog && soil && xiao) {
+      const st = soilStatus(scene.parts);
+      const out = soilPins(soil).find(q => q.name === 'AOUT');
+      if (st.items.slice(0, 2).every(i => i.ok) && out) {
+        const pts = this.leadPoints(out);
+        const pin = st.aout && xiaoPins(xiao.col).find(q => q.name === st.aout);
+        if (pin) { const h = hole(pin.hole); pts.push(this.pt(h.x, h.y)); }
+        const str = pts.map(p => p.join(',')).join(' ');
+        el('polyline', { points: str, class: 'signal-path' }, this.gFlow);
+        el('polyline', { points: str, class: 'signal-dots' }, this.gFlow);
+      }
+    }
     if (scene.bus && xiao) {
       const xp = Object.fromEntries(xiaoPins(xiao.col).map(q => [q.name, q.hole]));
       const talk = [];
@@ -359,6 +373,7 @@ export class BoardView {
     if (p.type === 'sensor') return this.drawSensor(p, g);
     if (p.type === 'oled') return this.drawOled(p, g);
     if (p.type === 'antenna') return this.drawAntenna(p, g);
+    if (p.type === 'soil') return this.drawSoil(p, g);
     const A = hole(p.a), Bh = hole(p.b);
     const [ax, ay] = this.pt(A.x, A.y), [bx, by] = this.pt(Bh.x, Bh.y);
     const mx = (ax + bx) / 2, my = (ay + by) / 2;
@@ -504,6 +519,49 @@ export class BoardView {
     if (this.waves) {
       const [cx, cy] = this.pt(9.8, -8.4);
       for (let i = 0; i < 3; i++) el('circle', { cx, cy, r: P * 4.2, class: 'wave', style: `animation-delay:${i * 0.7}s` }, g);
+    }
+  }
+
+  // A lead's path on screen: from the pin, through any bends, to its hole.
+  leadPoints(q) {
+    const a = hole(q.hole), b = hole(q.lead);
+    return [[a.x, a.y], ...q.via, [b.x, b.y]].map(([x, y]) => this.pt(x, y));
+  }
+
+  // A capacitive soil sensor v1.2 from above: the electronics at the board end, the blade heading off to the pot.
+  drawSoil(p, g) {
+    const x0 = SOIL_X + 1; // the middle of its three pins
+    // the blade, off toward the plant pot, with the line you shouldn't push it past
+    this.rect(x0 - 4.4, -16, x0 + 4.4, -9.2, { class: 'soil-blade' }, g);
+    this.line(x0 - 4.4, -10.3, x0 + 4.4, -10.3, { class: 'soil-line' }, g);
+    // Two lines of text across the blade, stacked whichever way the board is turned.
+    const [l1, l2] = this.orient === 'h' ? [[x0, -11.3], [x0, -12.5]] : [[x0 - 0.8, -12.4], [x0 + 0.8, -12.4]];
+    this.text(...l1, 'blade: into the soil', { class: 'soil-note' }, g);
+    this.text(...l2, (this.orient === 'h' ? '↑' : '→') + ' to the plant pot', { class: 'soil-note' }, g);
+    // the electronics
+    this.rect(x0 - 4.4, -9.4, x0 + 4.4, -2.1, { rx: P * 0.3, class: 'soil-pcb' }, g);
+    this.rect(x0 - 3.4, -8.3, x0 - 0.6, -6.6, { rx: P * 0.08, class: 'soil-chip' }, g);
+    this.text(x0 - 2, -7.45, 'TLC555', { class: 'soil-part' }, g);
+    this.rect(x0 + 0.8, -8.1, x0 + 2.6, -6.9, { rx: P * 0.06, class: 'soil-chip' }, g);
+    this.text(x0 + 1.7, -7.5, '662K', { class: 'soil-part' }, g);
+    this.text(x0, -5.4, 'v1.2', { class: 'soil-name' }, g);
+    this.rect(x0 - 1.6, -3.6, x0 + 1.6, -2.15, { rx: P * 0.1, class: 'soil-jst' }, g);
+    for (const q of soilPins({ ...p, leads: { GND: 1, VCC: 1, AOUT: 1 } })) {
+      const h = hole(q.hole);
+      this.text(h.x, h.y - 1.45, q.name, { class: 'xiao-pin' }, g);
+    }
+    const colors = { GND: '#2a2a2c', VCC: '#d8343a', AOUT: '#e8b923' };
+    for (const q of soilPins(p)) {
+      const pts = this.leadPoints(q).map(p => p.join(',')).join(' ');
+      el('polyline', { points: pts, stroke: colors[q.name], class: 'wire lead soil-lead' }, g);
+      el('polyline', { points: pts, class: 'wire-shine soil-lead' }, g);
+      const [bx, by] = this.leadPoints(q).at(-1);
+      el('circle', { cx: bx, cy: by, r: P * 0.12, class: 'pin' }, g);
+    }
+    for (const n of ['GND', 'VCC', 'AOUT']) {
+      const h = hole('SOIL-' + n);
+      const [ax, ay] = this.pt(h.x, h.y);
+      el('circle', { cx: ax, cy: ay, r: P * 0.24, class: 'xiao-pad' }, g);
     }
   }
 

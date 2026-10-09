@@ -652,3 +652,161 @@ export const TROUBLE = [
     text: `The topic in the ntfy app has to match the sketch exactly, capitals included, and the app needs permission to show notifications. Check both, then breathe on the sensor.`,
   },
 ];
+
+// ----- Level 5: a capacitive soil moisture sensor v1.2 -----
+
+const soilLeads = { GND: 'T-17', VCC: 'T+18', AOUT: 'j3' };
+// AOUT can't go straight to D1: the XIAO is in the way. The lead runs down between two columns of holes,
+// along under row j, and comes up into D1's strip from below.
+const soilVia = { AOUT: [[18.5, -1.9], [18.5, 14.55], [2.5, 14.55]] };
+export const soil = { type: 'soil', fixed: true, leads: soilLeads, via: soilVia };
+const soilBare = { type: 'soil', fixed: true, leads: {} };
+const soilPowered = { type: 'soil', fixed: true, leads: { GND: soilLeads.GND, VCC: soilLeads.VCC } };
+export const SOIL_CIRCUIT = [xiao, w3v3, wgnd, soil, res2, led2, lgnd];
+export const THIRSTY = 30;
+// What this make of sensor reads, in millivolts, at 3.3 V: open air, water up to the line,
+// and soil from bone dry (wet = 0) to soaked (wet = 1).
+export const SOIL_MV = { air: 2380, water: 1120, soil: wet => Math.round(2150 - 880 * wet) };
+const SOIL_AREA = [-1.9, -13.3, 21.5, 16];
+
+export const SKETCH5 = `// Capacitive soil moisture sensor v1.2 on a XIAO ESP32C3
+const int SOIL_PIN = A1;      // AOUT goes to D1 (A1)
+const int LED_PIN = D10;      // lights when the plant wants water
+int DRY = 2400;               // mV in open air: measure yours
+int WET = 1100;               // mV in water up to the line: measure yours
+const int THIRSTY = ${THIRSTY};       // percent
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(LED_PIN, OUTPUT);
+}
+
+void loop() {
+  // Average 16 readings: one on its own jumps around a little.
+  long sum = 0;
+  for (int i = 0; i < 16; i++) {
+    sum += analogReadMilliVolts(SOIL_PIN);
+    delay(5);
+  }
+  int mv = sum / 16;
+
+  // Wetter soil gives a LOWER voltage, so DRY maps to 0% and WET to 100%.
+  int percent = constrain(map(mv, DRY, WET, 0, 100), 0, 100);
+  Serial.printf("%d mV  ->  %d%% wet\\n", mv, percent);
+
+  digitalWrite(LED_PIN, percent < THIRSTY ? HIGH : LOW);
+  delay(1000);
+}`;
+
+const probeArt = `<svg class="art" viewBox="0 0 300 118" role="img" aria-label="The sensor from the side. At the left, the three-pin connector and the electronics, with the TLC555 chip and the 662K regulator. A white line marks where the blade starts. The blade, on the right, is the part that goes into the soil.">
+  <rect x="104" y="40" width="182" height="40" rx="4" fill="#1d1f22"/>
+  <path d="M276 40l12 20-12 20z" fill="#1d1f22"/>
+  <rect x="18" y="36" width="90" height="48" rx="5" fill="#2a2c31"/>
+  <rect x="6" y="48" width="14" height="24" rx="2" fill="#f1eee6" stroke="#b9b2a2"/>
+  <rect x="34" y="46" width="26" height="16" rx="2" fill="#0f1012" stroke="#555a60"/>
+  <rect x="70" y="48" width="18" height="11" rx="2" fill="#0f1012" stroke="#555a60"/>
+  <path d="M106 36v48" stroke="#f2f2ee" stroke-width="2.5" stroke-dasharray="5 3"/>
+  <path d="M120 98h160" class="a-wire"/><text x="200" y="112" class="a-text">the blade goes in the soil</text>
+  <text x="47" y="28" class="a-text">TLC555</text><text x="79" y="98" class="a-text">662K</text>
+  <text x="106" y="28" class="a-text">don’t push past this line</text>
+  <text x="13" y="98" class="a-text start">GND VCC AOUT</text>
+</svg>`;
+
+STEPS.push(
+  {
+    id: 'soil', level: 5, title: 'Meet the soil sensor', xray: 'off', focus: SOIL_AREA,
+    parts: [xiao, soilBare],
+    body: `<p>This is a <b>capacitive soil moisture sensor v1.2</b>. The blade is a capacitor: the wetter the soil around it, the more electric charge it holds. A little circuit turns that into a voltage on <b>AOUT</b>.</p>
+      ${probeArt}
+      <ul>
+        <li><b>Wetter soil gives a lower voltage.</b> About 2.4 V in dry air, about 1.1 V in water.</li>
+        <li><b>Nothing metal touches the soil,</b> so it doesn't rust away like the cheap two-prong kind.</li>
+        <li><b>Only the blade goes in.</b> The electronics above the white line aren't waterproof.</li>
+      </ul>
+      <p class="hint">Check two parts on yours: the chip should say <b>TLC555</b> and the small 3-legged part <b>662K</b>, its voltage regulator. Clones with an NE555 chip often don't work on 3.3 V.</p>`,
+  },
+  {
+    id: 'soil-power', level: 5, title: 'Power it from 3V3', xray: 'peek', focus: SOIL_AREA,
+    parts: [xiao, w3v3, wgnd, soilPowered],
+    highlights: [{ net: 'T+', tone: 'plus' }, { net: 'T-', tone: 'minus' }],
+    body: `<p>Same as the sensor in level 2: <b class="plus">3V3 to the + rail</b> and <b class="minus">GND to the − rail</b>, then the sensor's cable plugs into the rails, <b class="plus">VCC to +</b> and <b class="minus">GND to −</b>.</p>
+      <p>The sensor's cable usually ends in sockets, not pins, so use three male-to-female jumper wires to reach the board.</p>
+      <p class="hint">Why 3.3 V and not 5 V? The XIAO's pins can only take 3.3 V. Powered from 3V3, the sensor's output can never go over that.</p>`,
+  },
+  {
+    id: 'soil-aout', level: 5, title: 'AOUT to an analog pin', xray: 'peek', focus: SOIL_AREA, analog: true,
+    parts: [xiao, w3v3, wgnd, soil],
+    highlights: [{ net: '3fj', tone: 'signal' }],
+    body: `<p>AOUT is a voltage, not an on-or-off signal, so it needs a pin that can measure one. On the XIAO those are the <b>A</b> pins. Use <b>D1</b>, also called <b>A1</b>.</p>
+      <ul>
+        <li><b>D1 and D2</b> are analog pins with no other job.</li>
+        <li><b>D0</b> measures too, but the chip checks it at power-up, so keep sensors off it.</li>
+        <li><b>D3</b> is on a second converter that stops working while Wi-Fi is on.</li>
+      </ul>
+      <p>The XIAO is in the way, so the yellow lead goes around it and comes up into D1's strip, row 3, holes f to j. Row 3's other half is GND: the middle gap keeps them apart, so make sure it's this side.</p>`,
+  },
+  {
+    id: 'soil-cal', level: 5, title: 'Calibrate it', xray: 'off', focus: SOIL_AREA, analog: true, mode: 'soilcal',
+    parts: SOIL_CIRCUIT,
+    body: `<p>Every sensor reads a little differently, so measure the two ends of the scale on yours. Hold it in open air, then dip it in a glass of water <b>up to the white line</b>, and write down both numbers.</p>
+      <p>Those become <code>DRY</code> and <code>WET</code> in the code. Everything in between turns into 0% to 100%.</p>`,
+  },
+  {
+    id: 'soil-run', level: 5, title: 'Water me', xray: 'off', focus: SOIL_AREA, analog: true, mode: 'soilrun',
+    parts: SOIL_CIRCUIT,
+    body: `<p>The sketch reads the soil once a second and lights the LED on D10 when it drops below ${THIRSTY}%. Let a few days pass, then water the plant.</p>
+      <details class="code"><summary>The code</summary><pre><code>${esc(SKETCH5)}</code></pre>
+        <button class="btn quiet copy" type="button">Copy the code</button>
+        <p class="hint">No libraries needed. Put in your DRY and WET numbers, set Tools → USB CDC On Boot → Enabled, and open the Serial Monitor at 115200.</p>
+      </details>`,
+  },
+  {
+    id: 'soil-wrong', level: 5, title: 'Readings look wrong?', xray: 'peek', focus: SOIL_AREA, analog: true, mode: 'mistakes',
+    body: `<p>What the Serial Monitor shows tells you what's wrong. Pick a symptom, then show the fix.</p>`,
+  },
+);
+
+const withSoil = leads => SOIL_CIRCUIT.map(q => (q === soil ? { ...soil, leads: { ...soilLeads, ...leads } } : q));
+
+// serial: how the readings look with the mistake ('zero', 'noise', 'flat', 'drift', 'top', 'fail')
+export const MISTAKES5 = [
+  {
+    id: 'zero', label: 'Always 0 mV', serial: 'zero',
+    parts: withSoil({ VCC: 'B+18' }),
+    highlights: [{ net: 'B+', tone: 'bad' }],
+    text: `The sensor's VCC went into the {B} + rail, which nothing feeds, so the sensor is off and AOUT sits at 0. Check VCC reaches 3V3, and GND reaches GND.`,
+  },
+  {
+    id: 'noise', label: 'Jumps around', serial: 'noise',
+    parts: withSoil({ AOUT: 'j4' }),
+    highlights: [{ net: '4fj', tone: 'bad' }, { net: '3fj', tone: 'signal' }],
+    text: `The lead went into row 4, D2's strip, but the code reads A1. With nothing on it, D1 picks up stray charge and the numbers wander. Move the lead to row 3, or change SOIL_PIN to A2.`,
+  },
+  {
+    id: 'flat', label: 'Barely changes', serial: 'flat',
+    parts: SOIL_CIRCUIT,
+    text: `Wiring's fine, but the reading hardly moves between air and water. That's usually a clone: look for NE555 on the chip instead of TLC555. They need about 5 V and work badly, if at all, on 3.3. Replacing the sensor is the reliable fix.`,
+  },
+  {
+    id: 'drift', label: 'Drifts in water', serial: 'drift',
+    parts: SOIL_CIRCUIT,
+    text: `It was dipped past the white line, so water reached the electronics and the reading creeps. Dry it off fully, and only push the blade in up to the line, in the glass and in the pot.`,
+  },
+  {
+    id: 'top', label: 'Stuck near the top', serial: 'top',
+    parts: SOIL_CIRCUIT,
+    text: `In dry air, readings near 2,500 mV and above are close to what the C3 can measure, so they bunch up. That's normal: soil is never as dry as air. If it bothers you, use your driest soil as DRY.`,
+  },
+  {
+    id: 'wifi', label: 'Fails with Wi-Fi', serial: 'fail',
+    parts: withSoil({ AOUT: 'j5' }),
+    highlights: [{ net: '5fj', tone: 'bad' }],
+    text: `AOUT is on D3, which uses the C3's second analog converter. That one stops working while Wi-Fi is on, so it reads fine until you add level 4's code. Use D1.`,
+  },
+];
+for (const m of MISTAKES5) m.fix = SOIL_CIRCUIT;
+// The AOUT lead's bends only fit row 3; for row 4 or 5 it comes up a little further along.
+for (const m of MISTAKES5) for (const p of m.parts) if (p.type === 'soil' && p.leads.AOUT !== 'j3') {
+  const x = +p.leads.AOUT.slice(1) - 1;
+  p.via = { AOUT: [[18.5, -1.9], [18.5, 14.55], [x + 0.5, 14.55]] };
+}

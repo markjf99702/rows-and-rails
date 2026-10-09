@@ -6,7 +6,7 @@
 // In level 2 the XIAO is the power instead: its 3V3 and 5V pins are always on, and D10 is on
 // when the code sets it HIGH. All three come back to its GND pin.
 
-import { hole, netOf, BATTERY, xiaoPins, sensorPins, oledPins } from './board.js';
+import { hole, netOf, BATTERY, xiaoPins, sensorPins, oledPins, soilPins } from './board.js';
 
 const MAX_PATHS = 400;
 
@@ -20,6 +20,8 @@ export function edgesOf(parts) {
       edges.push({ part: i, kind: 'lead', a: 'BAT-', b: BATTERY.minus });
     } else if (p.type === 'oled') {
       for (const q of oledPins(p)) edges.push({ part: i, kind: 'lead', a: q.hole, b: q.lead });
+    } else if (p.type === 'soil') {
+      for (const q of soilPins(p)) edges.push({ part: i, kind: 'lead', a: q.hole, b: q.lead });
     } else if (p.type === 'wire' || p.type === 'resistor' || p.type === 'led') {
       edges.push({ part: i, kind: p.type, a: p.a, b: p.b });
     }
@@ -124,7 +126,7 @@ export function sensorWiring(parts, type = 'sensor') {
     if (!pinsOn.has(n)) pinsOn.set(n, []);
     pinsOn.get(n).push(q.name);
   }
-  const pins = type === 'oled' ? oledPins(device) : sensorPins(device.col, device.row);
+  const pins = type === 'oled' ? oledPins(device) : type === 'soil' ? [...soilPins(device), ...['GND', 'VCC', 'AOUT'].filter(n => !device.leads[n]).map(name => ({ name, hole: 'SOIL-' + name }))] : sensorPins(device.col, device.row);
   return Object.fromEntries(pins.map(q => [q.name, pinsOn.get(find(netOf(q.hole))) || []]));
 }
 
@@ -170,6 +172,30 @@ export function screenStatus(parts) {
     else items.push({ pin, ok: false, say: `The screen’s ${pin} isn’t connected to ${want}.` });
   }
   return { ok: items.every(i => i.ok), items, wiring: w };
+}
+
+// Is the soil sensor powered, and is AOUT on a pin that can measure it? { ok, items: [{ pin, ok, warn, say }], aout }
+// aout: the XIAO pin AOUT reaches ('D1' ...), or null when it reaches none.
+export function soilStatus(parts) {
+  const w = sensorWiring(parts, 'soil');
+  if (!w) return null;
+  const has = (pin, name) => w[pin].includes(name);
+  const items = [];
+  if (has('VCC', 'GND')) items.push({ pin: 'VCC', ok: false, say: 'VCC is joined to GND: the sensor gets no power.' });
+  else if (has('VCC', '3V3')) items.push({ pin: 'VCC', ok: true, say: 'VCC gets 3.3 V.' });
+  else if (has('VCC', '5V')) items.push({ pin: 'VCC', ok: true, warn: true, say: 'VCC is on 5 V. The v1.2 has its own regulator, so it copes, but 3V3 is simpler and safe.' });
+  else items.push({ pin: 'VCC', ok: false, say: 'VCC isn’t connected to 3V3, so the sensor is off.' });
+  if (has('GND', 'GND')) items.push({ pin: 'GND', ok: true, say: 'GND shares the XIAO’s ground.' });
+  else items.push({ pin: 'GND', ok: false, say: 'GND isn’t connected to the XIAO’s GND.' });
+  const aout = ['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10'].find(n => has('AOUT', n)) || null;
+  const say = {
+    D1: ['ok', 'AOUT goes to D1 (A1): an analog pin with no other job.'],
+    D2: ['ok', 'AOUT goes to D2 (A2), an analog pin. Change SOIL_PIN to A2 in the code.'],
+    D0: ['warn', 'AOUT goes to D0 (A0). It measures, but D0 is checked by the chip at power-up, so D1 is a safer choice.'],
+    D3: ['warn', 'AOUT goes to D3. It’s on the second analog converter, which stops working while Wi-Fi is on. Use D1.'],
+  }[aout] || [false, aout ? `AOUT goes to ${aout}, which can’t measure a voltage. Move it to D1.` : 'AOUT isn’t connected to any XIAO pin.'];
+  items.push({ pin: 'AOUT', ok: !!say[0], warn: say[0] === 'warn', say: say[1] });
+  return { ok: items.every(i => i.ok), items, aout, wiring: w };
 }
 
 // The wires a signal takes from one hole to another, as loop steps, or null if they aren't joined by wires.

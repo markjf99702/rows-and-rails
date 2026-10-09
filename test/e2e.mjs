@@ -288,6 +288,52 @@ for (let i = 0; i < await tabs4.count(); i++) {
   assert.equal(await page.locator('#pp-t').count(), 1, 'the page opens after the fix ' + i);
 }
 
+
+// ----- Level 5: the soil sensor -----
+await go('nowifi');
+assert.equal(await text('#next'), 'Level 5');
+await page.click('#next');
+assert.match(await text('#kicker'), /Level 5 · Step 1 of 6/i);
+assert.equal(await page.locator('.part-soil').count(), 1);
+await go('soil-aout');
+await page.waitForTimeout(400);
+assert.equal(await page.locator('.signal-dots').count(), 1, 'the voltage travels down AOUT');
+await tap('j3');
+assert.match(await text('#info'), /soil sensor’s AOUT lead/);
+await tap('h3');
+assert.match(await text('#info'), /XIAO’s D1 pin \(A1\)/);
+
+await go('soil-cal');
+await page.click('button:has-text("Use this as DRY")');
+await page.click('button:has-text("Dip it in water")');
+await page.click('button:has-text("Use this as WET")');
+assert.match(await text('#extra pre'), /int DRY = 23\d\d;[\s\S]*int WET = 11\d\d;/, 'your numbers go into the code');
+assert.match(await text('#extra'), /Calibrated/);
+
+await go('soil-run');
+await page.click('button:has-text("Let a few days pass")');
+await page.waitForTimeout(900);
+await page.click('button:has-text("Let a few days pass")');
+await page.waitForTimeout(900);
+await page.click('button:has-text("Let a few days pass")');
+await page.waitForTimeout(900);
+assert.match(await text('#soil-say'), /below 30%/, 'dry enough to ask for water');
+assert.equal(await page.locator('.part-led.led-lit').count(), 1, 'and the LED is on');
+await page.click('button:has-text("Water it")');
+await page.waitForTimeout(1200);
+assert.match(await text('#soil-say'), /the LED is off/);
+assert.match(await text('#serial'), /\d+ mV {2}-> {2}\d+% wet/);
+
+await go('soil-wrong');
+const tabs5 = page.locator('.tab');
+for (let i = 0; i < await tabs5.count(); i++) {
+  await tabs5.nth(i).click();
+  assert.equal(await page.locator('#extra .verdict.bad').count(), 1, 'soil symptom ' + i);
+  await page.click('button:has-text("Show the fix")');
+  assert.equal(await text('#extra .verdict'), 'Steady, believable readings.', 'soil fix ' + i);
+}
+await page.click('.tab >> nth=0');
+assert.match(await text('#extra pre'), /0 mV {2}-> {2}100% wet/, 'no power reads as soaking wet');
 await go('build');
 
 // Fits a phone: nothing scrolls sideways.

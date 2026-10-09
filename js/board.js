@@ -35,6 +35,11 @@ export const OLED_PIN_NAMES = ['GND', 'VCC', 'SCL', 'SDA'];
 export const OLED_X = 19; // where its GND pin is; the others follow one hole apart
 OLED_PIN_NAMES.forEach((n, i) => holes.set('OLED-' + n, { id: 'OLED-' + n, x: OLED_X + i, y: -2.75, kind: 'oled', net: 'oled-' + n.toLowerCase() }));
 
+// Level 5's soil sensor sits above the board too, its blade off toward the plant pot, on a three-wire cable.
+export const SOIL_PIN_NAMES = ['GND', 'VCC', 'AOUT'];
+export const SOIL_X = 16; // where its GND pin is
+SOIL_PIN_NAMES.forEach((n, i) => holes.set('SOIL-' + n, { id: 'SOIL-' + n, x: SOIL_X + i, y: -2.75, kind: 'soil', net: 'soil-' + n.toLowerCase() }));
+
 export const HOLES = [...holes.values()].filter(h => h.kind === 'main' || h.kind === 'rail');
 
 export function hole(id) {
@@ -107,8 +112,12 @@ export function sensorPins(col, row = 'h') { return SENSOR_PINS.map((name, i) =>
 // The screen's pins and the board holes its leads plug into.
 export const oledPins = p => OLED_PIN_NAMES.map(name => ({ name, hole: 'OLED-' + name, lead: p.leads[name] }));
 
+// The soil sensor's pins, the holes its leads plug into, and any bends the leads take on the way.
+export const soilPins = p => SOIL_PIN_NAMES.map(name => ({ name, hole: 'SOIL-' + name, lead: p.leads[name], via: p.via?.[name] || [] })).filter(q => q.lead);
+
 // Every hole a part fills: its legs or pins, and any it covers up.
 export function partHoles(p) {
+  if (p.type === 'soil') return soilPins(p).map(q => q.lead);
   if (p.type === 'oled') return Object.values(p.leads);
   if (p.type === 'battery') return [BATTERY.plus, BATTERY.minus];
   if (p.type === 'xiao') return [...xiaoPins(p.col).map(q => q.hole), ...[0, 1, 2, 3, 4, 5, 6].flatMap(i => ['e', 'f', 'g'].map(l => l + (p.col + i)))];
@@ -131,6 +140,9 @@ export function whatsIn(parts, id) {
     } else if (p.type === 'oled') {
       const pin = oledPins(p).find(q => q.lead === id);
       if (pin) return `the screen’s ${pin.name} lead`;
+    } else if (p.type === 'soil') {
+      const pin = soilPins(p).find(q => q.lead === id);
+      if (pin) return `the soil sensor’s ${pin.name} lead`;
     } else if (p.type === 'battery') {
       if (id === BATTERY.plus) return 'the battery’s red lead (+)';
       if (id === BATTERY.minus) return 'the battery’s black lead (−)';

@@ -117,3 +117,23 @@ test('screen mistakes', () => {
   const crossed = [...L3.slice(0, -2), { type: 'wire', a: 'e22', b: 'g20' }, { type: 'wire', a: 'e23', b: 'f19' }];
   assert.match(screenStatus(crossed).items.find(i => i.pin === 'SDA').say, /swapped/);
 });
+
+// ----- Level 5 -----
+import { soilStatus } from '../js/circuit.js';
+const soil = { type: 'soil', leads: { GND: 'T-17', VCC: 'T+18', AOUT: 'j3' } };
+const L5 = [xiao, { type: 'wire', a: 'a4', b: 'T+4' }, { type: 'wire', a: 'a3', b: 'T-3' }, soil];
+
+test('the soil sensor: powered from 3V3, AOUT on D1', () => {
+  const st = soilStatus(L5);
+  assert.equal(st.ok, true);
+  assert.equal(st.aout, 'D1');
+});
+
+test('soil sensor mistakes', () => {
+  const withLeads = leads => L5.map(q => (q === soil ? { ...soil, leads: { ...soil.leads, ...leads } } : q));
+  assert.equal(soilStatus(withLeads({ AOUT: 'j5' })).items[2].warn, true, 'D3 works but is on ADC2');
+  assert.equal(soilStatus(withLeads({ AOUT: 'j9' })).aout, null, 'row 9 is no pin at all');
+  assert.equal(soilStatus(withLeads({ VCC: 'B+18' })).items[0].ok, false, 'the bottom rail is not powered');
+  assert.equal(soilStatus(L5.filter((_, k) => k !== 2)).items[1].ok, false, 'no ground wire to the rail');
+  assert.equal(soilStatus(withLeads({ AOUT: 'j8' })).ok, false, 'D6 can’t measure');
+});

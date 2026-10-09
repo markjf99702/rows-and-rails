@@ -1,7 +1,7 @@
 import { HOLES, hole, netOf, netHoles, describeNet, describeHole, cap, setSides, sided, partHoles, whatsIn, EXTENT } from './board.js';
-import { sensorStatus, screenStatus, analyze } from './circuit.js';
+import { sensorStatus, screenStatus, soilStatus, analyze } from './circuit.js';
 import { BoardView, WIRE_CYCLE } from './render.js';
-import { STEPS, MISTAKES, LED_CIRCUIT, MISTAKES2, XIAO_CIRCUIT, xiao, bme, HOT, MISTAKES3, SCREEN_CIRCUIT, oled, EXTENT3, TROUBLE, antenna, IP } from './lessons.js';
+import { STEPS, MISTAKES, LED_CIRCUIT, MISTAKES2, XIAO_CIRCUIT, xiao, bme, HOT, MISTAKES3, SCREEN_CIRCUIT, oled, EXTENT3, TROUBLE, antenna, IP, MISTAKES5, SOIL_CIRCUIT, THIRSTY, SOIL_MV } from './lessons.js';
 
 const $ = s => document.querySelector(s);
 const svg = $('#board');
@@ -23,6 +23,10 @@ const state = {
   wifi: 'on',     // level 4: 'off', 'joining' or 'on'
   alerts: [],     // level 4: pushes that reached the phone, newest first
   warned: false,  // the sketch's own flag: one buzz per warm spell
+  wet: 0.5,       // level 5: how wet the soil really is, 0 (bone dry) to 1 (soaked)
+  cal: { dry: null, wet: null }, // level 5: your calibration readings
+  holding: 'air', // level 5: where the probe is while calibrating: 'air' or 'water'
+  soilLog: [],
   high: true,     // D10, in the "LED on a pin" step
   temp: 22,       // what the sensor reads in "Run the code"
   serial: [],
@@ -57,7 +61,7 @@ function save() {
 const box = () => (step().mode !== 'challenge' ? state.sb : level() === 3 ? state.ch3 : state.ch);
 const level = (i = state.step) => STEPS[i].level || 1;
 const inLevel = l => STEPS.map((s, i) => i).filter(i => level(i) === l);
-const mistakes = () => [MISTAKES, MISTAKES2, MISTAKES3][level() - 1];
+const mistakes = () => ({ 1: MISTAKES, 2: MISTAKES2, 3: MISTAKES3, 5: MISTAKES5 })[level()];
 const sensorOK = () => sensorStatus(XIAO_CIRCUIT).ok;
 
 const step = () => STEPS[state.step];
@@ -68,6 +72,8 @@ function scene() {
   const s = step();
   const sc = { parts: s.parts || [], highlights: [...(s.highlights || [])], notes: (s.notes || []).map(n => ({ ...n, text: sided(n.text) })), marks: [], xray: state.xray ?? s.xray, bus: !!s.bus, high: level() >= 2 };
   if (s.mode === 'pin') sc.high = state.high;
+  sc.analog = !!s.analog;
+  if (level() === 5) sc.high = s.mode === 'soilrun' && soilPercent() < THIRSTY;
   if (level() === 4) {
     const t = s.mode === 'trouble' && !state.fixed ? TROUBLE[state.tab] : null;
     sc.wifi = t ? t.wifi : s.mode === 'join' ? state.wifi : s.mode === 'wifi' ? undefined : 'on';
@@ -149,6 +155,8 @@ function renderExtra(r) {
   else if (s.mode === 'run') runUI(ex);
   else if (s.mode === 'challenge') challengeUI(ex, r);
   else if (s.mode === 'join') joinUI(ex);
+  else if (s.mode === 'soilcal') soilCalUI(ex);
+  else if (s.mode === 'soilrun') soilRunUI(ex);
   else if (s.mode === 'trouble') troubleUI(ex);
   else if (s.build) {
     const done = s.build === 4 && r.leds.some(l => l.state === 'lit');
@@ -161,6 +169,7 @@ function h(tag, attrs = {}, ...kids) {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else if (k === 'html') n.innerHTML = v;
     else if (v !== false && v != null) n.setAttribute(k, v);
   }
   n.append(...kids);
@@ -183,6 +192,7 @@ function mistakesUI(ex, r) {
     role: 'tab', 'aria-selected': String(i === state.tab), class: 'tab',
     onclick: () => { state.tab = i; state.fixed = false; state.inspect = null; render(); applyFocus(); },
   }, mm.label)));
+  if (level() === 5) { ex.append(tabs, ...soilVerdict(m)); return; }
   ex.append(tabs, ...(level() === 3 ? verdict3(view.scene, r) : level() === 2 ? verdict2(view.scene.parts, r) : [verdict(r)]).map(([tone, say]) => h('p', { class: 'verdict ' + tone }, say)),
     h('p', {}, sided(state.fixed ? (m.fixText || 'Fixed. Compare it with the broken one to spot the difference.') : m.text)),
     h('button', { class: 'btn', onclick: () => { state.fixed = !state.fixed; render(); } }, state.fixed ? 'Show the mistake again' : 'Show the fix'));
@@ -260,6 +270,120 @@ function refreshScreen() {
   view.setScreen(url);
   const big = $('#oled');
   if (big) big.src = url || darkScreen();
+}
+
+// ----- Level 5: the soil sensor -----
+
+const noisy = (mv, n = 6) => Math.round(mv + (Math.random() - 0.5) * 2 * n);
+const DRY = () => state.cal.dry ?? 2400, WET = () => state.cal.wet ?? 1100;
+// The sketch's own sums: map() and constrain(), in whole numbers like the Arduino.
+const percentOf = mv => Math.max(0, Math.min(100, Math.trunc((mv - DRY()) * 100 / (WET() - DRY()))));
+const soilMv = () => SOIL_MV.soil(state.wet);
+const soilPercent = () => percentOf(soilMv());
+const logLine = mv => `${mv} mV  ->  ${percentOf(mv)}% wet`;
+
+// The probe from the side: held in the air, in a glass of water, or in the plant pot.
+function probeScene(where) {
+  const wet = state.wet;
+  const mix = (a, b) => '#' + [0, 2, 4].map(i => Math.round(parseInt(a.slice(1 + i, 3 + i), 16) * (1 - wet) + parseInt(b.slice(1 + i, 3 + i), 16) * wet).toString(16).padStart(2, '0')).join('');
+  const probe = (y, h) => `<rect x="112" y="${y}" width="22" height="${h}" rx="3" fill="#1d1f22"/><rect x="108" y="${y}" width="30" height="26" rx="3" fill="#2a2c31"/>
+    <path d="M110 ${y + 30}h26" stroke="#f2f2ee" stroke-width="2" stroke-dasharray="4 2"/><path d="M118 ${y}v-18M123 ${y}v-18M128 ${y}v-18" stroke-width="2.4" stroke="#999" fill="none"/>`;
+  if (where === 'air') return `<svg class="art scene" viewBox="0 0 246 150" role="img" aria-label="The sensor held up in the air">${probe(22, 108)}<text x="190" y="80" class="a-text">open air</text></svg>`;
+  if (where === 'water') return `<svg class="art scene" viewBox="0 0 246 150" role="img" aria-label="The sensor in a glass of water up to the white line">
+    <path d="M70 40l10 104h86l10-104" fill="none" stroke="#9aa2aa" stroke-width="3"/><path d="M75 56 L 81 141 H 165 L 171 56Z" fill="#5fb3e8" opacity=".55"/>${probe(26, 108)}
+    <text x="214" y="96" class="a-text">water up to</text><text x="214" y="110" class="a-text">the line</text></svg>`;
+  const leaf = wet > 0.3 ? '#3f9a4a' : wet > 0.15 ? '#8aa13a' : '#b59a3a';
+  const droop = Math.round((0.45 - Math.min(wet, 0.45)) * 60);
+  return `<svg class="art scene" viewBox="0 0 246 160" role="img" aria-label="A potted plant with the sensor's blade in the soil. The soil is ${Math.round(wet * 100)}% of the way from bone dry to soaked.">
+    <path d="M150 70c0-22 6-40 4-58" stroke="#3d7a3c" stroke-width="4" fill="none"/>
+    <g transform="rotate(${droop} 154 30)"><path d="M154 30c-24-10-40-2-46 10 20 6 36 2 46-10z" fill="${leaf}"/></g>
+    <g transform="rotate(${-droop} 154 22)"><path d="M154 22c22-12 40-6 46 6-20 8-36 4-46-6z" fill="${leaf}"/></g>
+    <path d="M60 74h150l-14 80H74z" fill="#c4683a"/><rect x="54" y="66" width="162" height="14" rx="3" fill="#d4774a"/>
+    <path d="M64 82h142l-2 10H66z" fill="${mix('#d9b98c', '#3b2416')}"/>
+    <path d="M66 92h138l-9 58H75z" fill="${mix('#c9a77c', '#4a2f1d')}" opacity=".85"/>
+    ${probe(22, 92).replace(/x="112"/, 'x="96"').replace(/x="108"/, 'x="92"').replace(/M110/, 'M94').replace(/M118 22v-18M123 22v-18M128 22v-18/, 'M102 22v-18M107 22v-18M112 22v-18')}
+    <g class="drops" id="drops"></g>
+  </svg>`;
+}
+
+function soilCalUI(ex) {
+  const mv = noisy(state.holding === 'air' ? SOIL_MV.air : SOIL_MV.water, 4);
+  ex.append(
+    h('div', { class: 'row' },
+      h('button', { class: 'btn' + (state.holding === 'air' ? '' : ' quiet'), onclick: () => { state.holding = 'air'; render(); } }, 'Hold it in the air'),
+      h('button', { class: 'btn' + (state.holding === 'water' ? '' : ' quiet'), onclick: () => { state.holding = 'water'; render(); } }, 'Dip it in water')),
+    h('div', { class: 'scene-wrap', html: probeScene(state.holding) }),
+    h('p', { class: 'reading' }, h('span', {}, 'AOUT reads'), h('b', { id: 'cal-mv' }, `${mv} mV`)),
+    h('button', { class: 'btn', onclick: () => { state.cal[state.holding === 'air' ? 'dry' : 'wet'] = mv; render(); } },
+      state.holding === 'air' ? 'Use this as DRY' : 'Use this as WET'),
+    h('pre', { class: 'snippet' }, h('code', {}, `int DRY = ${state.cal.dry ?? '____'};   // open air\nint WET = ${state.cal.wet ?? '____'};   // water, up to the line`)),
+    h('p', { class: 'verdict ' + (state.cal.dry && state.cal.wet ? 'good' : '') },
+      state.cal.dry && state.cal.wet ? 'Calibrated. These numbers go into the code on the next step.' : 'Take one reading in each place.'));
+}
+
+function soilRunUI(ex) {
+  const pct = soilPercent();
+  ex.append(
+    h('div', { class: 'scene-wrap', id: 'pot', html: probeScene('pot') }),
+    h('div', { class: 'row' },
+      h('button', { class: 'btn', onclick: () => soilTo(Math.min(1, state.wet + 0.5), true) }, 'Water it'),
+      h('button', { class: 'btn quiet', onclick: () => soilTo(Math.max(0, state.wet - 0.15)) }, 'Let a few days pass')),
+    h('p', { class: 'verdict ' + (pct < THIRSTY ? 'bad' : 'good'), id: 'soil-say' }, soilSay(pct)),
+    h('p', { class: 'serial-label' }, 'Serial Monitor'),
+    h('pre', { class: 'serial', id: 'serial', 'aria-live': 'off' }, state.soilLog.join('\n')));
+  if (!state.cal.dry || !state.cal.wet) ex.append(h('p', { class: 'hint' }, 'Using the code’s example DRY and WET numbers. Calibrate on the step before to use yours.'));
+}
+
+const soilSay = pct => pct < THIRSTY ? `${pct}% wet: below ${THIRSTY}%, so D10 lights the LED. Time to water.` : `${pct}% wet: the LED is off.`;
+
+let soaking = null;
+function soilTo(target, watering = false) {
+  clearInterval(soaking);
+  const start = state.wet;
+  let t = 0;
+  if (watering) { const d = $('#drops'); if (d) d.innerHTML = [80, 104, 128, 152, 176].map((x, i) => `<circle cx="${x}" cy="60" r="3.5" style="animation-delay:${i * 0.12}s"/>`).join(''); }
+  soaking = setInterval(() => {
+    t = Math.min(1, t + 0.08);
+    state.wet = start + (target - start) * t;
+    if (t >= 1) clearInterval(soaking);
+    if (step().mode !== 'soilrun') return clearInterval(soaking);
+    refreshSoil();
+  }, 60);
+}
+
+function refreshSoil() {
+  const pot = $('#pot');
+  if (pot) pot.innerHTML = probeScene('pot');
+  const say = $('#soil-say'), pct = soilPercent();
+  if (say) { say.textContent = soilSay(pct); say.className = 'verdict ' + (pct < THIRSTY ? 'bad' : 'good'); }
+  draw();
+}
+
+// What the Serial Monitor shows for each mistake, and once it's fixed.
+function soilVerdict(m) {
+  const n = () => noisy(SOIL_MV.soil(0.45), 5);
+  const lines = state.fixed ? [0, 1, 2, 3].map(() => logLine(n())) : {
+    zero: [0, 0, 0, 0].map(logLine),
+    noise: [0, 1, 2, 3].map(() => logLine(Math.round(300 + Math.random() * 2500))),
+    flat: [`in air:   ${logLine(noisy(2210, 3))}`, `in water: ${logLine(noisy(2185, 3))}`],
+    drift: [1124, 1181, 1263, 1352].map(logLine),
+    top: [0, 1, 2, 3].map(() => logLine(noisy(2890, 8))),
+    fail: [logLine(n()), logLine(n()), 'WiFi connected', '(no more real readings from D3)'],
+  }[m.serial];
+  const say = state.fixed ? ['good', 'Steady, believable readings.'] : ['bad', {
+    zero: '0 mV every time, which the code calls 100% wet.',
+    noise: 'The numbers jump all over the place.',
+    flat: 'Air and water read almost the same.',
+    drift: 'In water the reading keeps creeping up.',
+    top: 'In air it sits near the top and won’t budge.',
+    fail: 'Fine until Wi-Fi starts, then nothing.',
+  }[m.serial]];
+  return [
+    h('p', { class: 'verdict ' + say[0] }, say[1]),
+    h('pre', { class: 'serial short' }, lines.join('\n')),
+    h('p', {}, sided(state.fixed ? 'Fixed. Compare the wiring with the broken one to spot the difference.' : m.text)),
+    h('button', { class: 'btn', onclick: () => { state.fixed = !state.fixed; render(); } }, state.fixed ? 'Show the problem again' : 'Show the fix'),
+  ];
 }
 
 // ----- Level 4: Wi-Fi and your phone -----
@@ -415,6 +539,20 @@ function breathe() {
 
 // The sketch prints once a second, like the real thing.
 function tick() {
+  if (step().mode === 'soilrun') {
+    state.wet = Math.max(0, state.wet - 0.003); // soil dries out a little all the time
+    state.soilLog.push(logLine(noisy(soilMv())));
+    if (state.soilLog.length > 40) state.soilLog.shift();
+    const pre = $('#serial');
+    if (pre) { pre.textContent = state.soilLog.join('\n'); pre.scrollTop = pre.scrollHeight; }
+    refreshSoil();
+    return;
+  }
+  if (step().mode === 'soilcal') {
+    const out = $('#cal-mv');
+    if (out) out.textContent = `${noisy(state.holding === 'air' ? SOIL_MV.air : SOIL_MV.water, 4)} mV`;
+    return;
+  }
   if (step().mode !== 'run' || !sensorOK()) return;
   if (level() >= 3) { refreshScreen(); refreshPhone(); return; }
   const t = state.temp + (Math.random() - 0.5) * 0.08;
