@@ -356,8 +356,16 @@ function soilTo(target, watering = false) {
 }
 
 function refreshSoil() {
-  const pot = $('#pot');
-  if (pot) pot.innerHTML = probeScene('pot');
+  const pot = $('#pot svg'), drops = $('#drops');
+  if (pot && drops) {
+    // Redraw the plant and the soil, but leave the drops be: taken out and put back, they'd start falling again.
+    const t = document.createElement('template');
+    t.innerHTML = probeScene('pot');
+    const fresh = t.content.firstElementChild;
+    for (const n of [...pot.childNodes]) if (n !== drops) n.remove();
+    drops.before(...[...fresh.childNodes].filter(n => n.id !== 'drops'));
+    pot.setAttribute('aria-label', fresh.getAttribute('aria-label'));
+  }
   const say = $('#soil-say'), pct = soilPercent();
   if (say) { say.textContent = soilSay(pct); say.className = 'verdict ' + (pct < THIRSTY ? 'bad' : 'good'); }
   draw();

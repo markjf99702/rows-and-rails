@@ -330,6 +330,8 @@ await page.waitForTimeout(900);
 assert.match(await text('#soil-say'), /below 30%/, 'dry enough to ask for water');
 assert.equal(await page.locator('.part-led.led-lit').count(), 1, 'and the LED is on');
 await page.click('button:has-text("Water it")');
+await page.waitForFunction(() => [...document.querySelectorAll('#drops circle')].some(c => +getComputedStyle(c).opacity > 0.5), null, { timeout: 3000 })
+  .catch(() => assert.fail('no water drops fall'));
 await page.waitForTimeout(1200);
 assert.match(await text('#soil-say'), /the LED is off/);
 assert.match(await text('#serial'), /\d+ mV {2}-> {2}\d+% wet/);
