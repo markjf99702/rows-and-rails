@@ -306,7 +306,15 @@ await tap('h3');
 assert.match(await text('#info'), /XIAO’s D1 pin \(A1\)/);
 
 await go('soil-cal');
-await page.click('button:has-text("Use this as DRY")');
+for (let i = 0; i < 3; i++) { // the reading changes every second; the button saves the one you see
+  await page.waitForTimeout(1100);
+  const [shown, saved] = await page.evaluate(() => { // in one go, so a new reading can't come in between
+    const shown = document.querySelector('#cal-mv').textContent;
+    [...document.querySelectorAll('#extra button')].find(b => b.textContent === 'Use this as DRY').click();
+    return [shown, /int DRY = (\d+)/.exec(document.querySelector('#extra pre').textContent)[1] + ' mV'];
+  });
+  assert.equal(saved, shown, 'DRY is the reading on screen');
+}
 await page.click('button:has-text("Dip it in water")');
 await page.click('button:has-text("Use this as WET")');
 assert.match(await text('#extra pre'), /int DRY = 23\d\d;[\s\S]*int WET = 11\d\d;/, 'your numbers go into the code');

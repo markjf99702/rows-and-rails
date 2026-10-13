@@ -26,6 +26,7 @@ const state = {
   wet: 0.5,       // level 5: how wet the soil really is, 0 (bone dry) to 1 (soaked)
   cal: { dry: null, wet: null }, // level 5: your calibration readings
   holding: 'air', // level 5: where the probe is while calibrating: 'air' or 'water'
+  calMv: null,    // and what AOUT reads there right now, in mV
   soilLog: [],
   high: true,     // D10, in the "LED on a pin" step
   temp: 22,       // what the sensor reads in "Run the code"
@@ -306,15 +307,18 @@ function probeScene(where) {
   </svg>`;
 }
 
+// A fresh reading where the probe is now. The button saves whichever one is on screen.
+const calRead = () => (state.calMv = noisy(state.holding === 'air' ? SOIL_MV.air : SOIL_MV.water, 4));
+
 function soilCalUI(ex) {
-  const mv = noisy(state.holding === 'air' ? SOIL_MV.air : SOIL_MV.water, 4);
+  const mv = state.calMv ?? calRead();
   ex.append(
     h('div', { class: 'row' },
-      h('button', { class: 'btn' + (state.holding === 'air' ? '' : ' quiet'), onclick: () => { state.holding = 'air'; render(); } }, 'Hold it in the air'),
-      h('button', { class: 'btn' + (state.holding === 'water' ? '' : ' quiet'), onclick: () => { state.holding = 'water'; render(); } }, 'Dip it in water')),
+      h('button', { class: 'btn' + (state.holding === 'air' ? '' : ' quiet'), onclick: () => { state.holding = 'air'; calRead(); render(); } }, 'Hold it in the air'),
+      h('button', { class: 'btn' + (state.holding === 'water' ? '' : ' quiet'), onclick: () => { state.holding = 'water'; calRead(); render(); } }, 'Dip it in water')),
     h('div', { class: 'scene-wrap', html: probeScene(state.holding) }),
     h('p', { class: 'reading' }, h('span', {}, 'AOUT reads'), h('b', { id: 'cal-mv' }, `${mv} mV`)),
-    h('button', { class: 'btn', onclick: () => { state.cal[state.holding === 'air' ? 'dry' : 'wet'] = mv; render(); } },
+    h('button', { class: 'btn', onclick: () => { state.cal[state.holding === 'air' ? 'dry' : 'wet'] = state.calMv; render(); } },
       state.holding === 'air' ? 'Use this as DRY' : 'Use this as WET'),
     h('pre', { class: 'snippet' }, h('code', {}, `int DRY = ${state.cal.dry ?? '____'};   // open air\nint WET = ${state.cal.wet ?? '____'};   // water, up to the line`)),
     h('p', { class: 'verdict ' + (state.cal.dry && state.cal.wet ? 'good' : '') },
@@ -550,7 +554,7 @@ function tick() {
   }
   if (step().mode === 'soilcal') {
     const out = $('#cal-mv');
-    if (out) out.textContent = `${noisy(state.holding === 'air' ? SOIL_MV.air : SOIL_MV.water, 4)} mV`;
+    if (out) out.textContent = `${calRead()} mV`;
     return;
   }
   if (step().mode !== 'run' || !sensorOK()) return;
