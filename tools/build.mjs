@@ -19,6 +19,8 @@ for (const f of ['board', 'circuit', 'render', 'lessons', 'app']) {
     .replace(/^export (const|function|class)/gm, '$1');
 }
 js = js.replace(/\nif \('serviceWorker' in navigator[^\n]*\n/, '\n');
+// Level 4's sketch has a web page in it, and its </script> would end this inline script early. In the code, <\/script means the same.
+js = js.replace(/<\/script/gi, '<\\/script');
 
 const html = await read('index.html');
 const body = html.slice(html.indexOf('<body>') + 6, html.indexOf('</body>'))

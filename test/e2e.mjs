@@ -11,7 +11,7 @@ const require = createRequire(import.meta.url);
 let pw;
 try { pw = require('playwright'); } catch { pw = require(join(execSync('npm root -g').toString().trim(), 'playwright')); }
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
 const server = createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   let body;
@@ -367,6 +367,25 @@ assert.equal(await text('#title'), 'Build your own', 'did not load offline');
 await ctx.setOffline(false);
 
 assert.deepEqual(problems.filter(p => !p.startsWith('failed:')), [], 'problems while using it');
+
+// The one-file copy for the Artifact viewer (node tools/build.mjs) opens and works, with nothing loaded from elsewhere.
+execSync('node tools/build.mjs', { cwd: root, stdio: 'ignore' });
+const actx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, serviceWorkers: 'block' });
+const art = await actx.newPage();
+const artProblems = [];
+art.on('pageerror', e => artProblems.push(e.message));
+art.on('console', m => { if (m.type() === 'error') artProblems.push(m.text()); });
+art.on('request', r => { if (!r.url().startsWith('data:') && !/dist\/artifact\.html|favicon\.ico/.test(r.url())) artProblems.push('asked for ' + r.url()); });
+await art.goto(base + 'dist/artifact.html');
+await art.waitForFunction(() => document.querySelector('#title')?.textContent, null, { timeout: 5000 }).catch(() => {});
+assert.equal(await art.locator('#title').innerText(), 'Meet the breadboard', 'the Artifact copy opens');
+assert.equal(await art.locator('#board .hole').count(), 400, 'and draws the board');
+await art.evaluate(() => { location.hash = 'station'; });
+await art.waitForFunction(() => document.querySelector('#title').textContent === 'The whole sketch');
+assert.match(await art.locator('details.code code').textContent(), /<\/script>\)page";/, 'the sketch keeps its web page whole');
+assert.deepEqual(artProblems, [], 'problems in the Artifact copy');
+await actx.close();
+
 await browser.close();
 server.close();
 console.log('all good');

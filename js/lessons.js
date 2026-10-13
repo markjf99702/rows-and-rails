@@ -553,16 +553,16 @@ void loop() {
 }`;
 
 // Where the readings travel: the XIAO, your router, and either your phone (same Wi-Fi) or the internet.
-const box = (x, label, sub, cls = '') => `<g class="${cls}"><rect x="${x}" y="26" width="64" height="40" rx="8" class="d-box"/>
+const routeBox = (x, label, sub, cls = '') => `<g class="${cls}"><rect x="${x}" y="26" width="64" height="40" rx="8" class="d-box"/>
   <text x="${x + 32}" y="45" class="d-label">${label}</text><text x="${x + 32}" y="58" class="d-sub">${sub}</text></g>`;
 const arrow = (x1, x2) => `<path d="M${x1} 46H${x2}" class="d-arrow"/><path d="M${x2 - 6} 41l6 5-6 5" class="d-arrow"/>`;
 const routeLocal = `<svg class="art route" viewBox="0 0 300 92" role="img" aria-label="The XIAO sends the page to your Wi-Fi router, which passes it to your phone. Everything stays in your home.">
   <rect x="2" y="8" width="296" height="80" rx="12" class="d-home"/><text x="14" y="22" class="d-home-label">your home Wi-Fi</text>
-  ${box(14, 'XIAO', 'weather.local')}${arrow(80, 116)}${box(118, 'router', '192.168.1.1')}${arrow(184, 220)}${box(222, 'phone', 'browser')}
+  ${routeBox(14, 'XIAO', 'weather.local')}${arrow(80, 116)}${routeBox(118, 'router', '192.168.1.1')}${arrow(184, 220)}${routeBox(222, 'phone', 'browser')}
 </svg>`;
 const routeOut = `<svg class="art route" viewBox="0 0 380 92" role="img" aria-label="For an alert, the XIAO sends a message through your router and the internet to ntfy.sh, which pushes it to the ntfy app on your phone, wherever it is.">
   <rect x="2" y="8" width="150" height="80" rx="12" class="d-home"/><text x="14" y="22" class="d-home-label">home</text>
-  ${box(10, 'XIAO', 'POST')}${arrow(76, 84)}${box(86, 'router', '')}${arrow(152, 158)}${box(160, 'internet', '')}${arrow(226, 232)}${box(234, 'ntfy.sh', 'your topic')}${arrow(300, 306)}${box(308, 'phone', 'ntfy app', 'd-end')}
+  ${routeBox(10, 'XIAO', 'POST')}${arrow(76, 84)}${routeBox(86, 'router', '')}${arrow(152, 158)}${routeBox(160, 'internet', '')}${arrow(226, 232)}${routeBox(234, 'ntfy.sh', 'your topic')}${arrow(300, 306)}${routeBox(308, 'phone', 'ntfy app', 'd-end')}
 </svg>`;
 
 STEPS.push(
