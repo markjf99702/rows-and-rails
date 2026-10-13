@@ -160,7 +160,7 @@ pre.snippet code { background: none; padding: 0; font-size: inherit; }
 .route .d-end .d-box { fill: var(--accent); stroke: var(--accent); }
 .route .d-end .d-label, .route .d-end .d-sub { fill: var(--accent-ink); }
 .route .d-label { font: 700 12px 'Figtree', sans-serif; fill: var(--ink); text-anchor: middle; }
-.route .d-sub { font: 500 8.5px 'Plex Mono', monospace; fill: var(--muted); text-anchor: middle; }
+.route .d-sub { font: 500 7.5px 'Plex Mono', monospace; fill: var(--muted); text-anchor: middle; }
 .route .d-arrow { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* the phone in level 4 goes straight under the title, so you see it react */

@@ -302,6 +302,10 @@ await page.waitForFunction(() => document.querySelector('#extra .verdict')?.text
 assert.equal(await page.locator('.wave').count(), 3, 'radio waves once it’s on Wi-Fi');
 
 await go('page');
+assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('.route rect.d-box')].flatMap(r => {
+  const b = r.getBBox();
+  return [...r.parentNode.querySelectorAll('text')].filter(t => { const tb = t.getBBox(); return tb.x < b.x + 1 || tb.x + tb.width > b.x + b.width - 1; }).map(t => t.textContent);
+})), [], 'words spill out of their boxes in the route diagram');
 await page.evaluate(() => { const s = document.querySelector('#temp'); s.value = '22'; s.dispatchEvent(new Event('input')); });
 assert.equal(await text('#pp-t'), '22.0 °C', 'the phone shows the reading');
 await page.evaluate(() => { const s = document.querySelector('#temp'); s.value = '24.5'; s.dispatchEvent(new Event('input')); });
