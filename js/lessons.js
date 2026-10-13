@@ -708,8 +708,8 @@ const probeArt = `<svg class="art" viewBox="0 0 300 118" role="img" aria-label="
   <path d="M106 36v48" stroke="#f2f2ee" stroke-width="2.5" stroke-dasharray="5 3"/>
   <path d="M120 98h160" class="a-wire"/><text x="200" y="112" class="a-text">the blade goes in the soil</text>
   <text x="47" y="28" class="a-text">TLC555</text><text x="79" y="98" class="a-text">662K</text>
-  <text x="106" y="28" class="a-text">don’t push past this line</text>
-  <text x="13" y="98" class="a-text start">GND VCC AOUT</text>
+  <text x="106" y="28" class="a-text start">don’t push past this line</text>
+  <text x="13" y="112" class="a-text start">GND VCC AOUT</text>
 </svg>`;
 
 STEPS.push(

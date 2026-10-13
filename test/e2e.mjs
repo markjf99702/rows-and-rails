@@ -332,6 +332,12 @@ assert.equal(await text('#next'), 'Level 5');
 await page.click('#next');
 assert.match(await text('#kicker'), /Level 5 · Step 1 of 6/i);
 assert.equal(await page.locator('.part-soil').count(), 1);
+// The diagram of the sensor: no two labels on the same line run into each other.
+assert.deepEqual(await page.evaluate(() => {
+  const ts = [...document.querySelectorAll('#body svg.art text')].map(t => ({ t, b: t.getBBox() }));
+  return ts.flatMap((p, i) => ts.slice(i + 1).filter(q => q.t.getAttribute('y') === p.t.getAttribute('y') && p.b.x < q.b.x + q.b.width && q.b.x < p.b.x + p.b.width)
+    .map(q => `${p.t.textContent} / ${q.t.textContent}`));
+}), [], 'labels print on top of each other');
 await go('soil-aout');
 await page.waitForTimeout(400);
 assert.equal(await page.locator('.signal-dots').count(), 1, 'the voltage travels down AOUT');
