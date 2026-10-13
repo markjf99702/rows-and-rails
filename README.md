@@ -13,7 +13,7 @@
   &nbsp;
   <img src="docs/phone-wifi.png" alt="Level 4: the antenna sending radio waves, and a phone lock screen with an ntfy alert from the Weather station: It's 27.1 C" width="250">
   &nbsp;
-  <img src="docs/phone-soil.png" alt="Level 5: the soil sensor's head above the board, its yellow AOUT lead routed around the XIAO into D1's row, and a potted plant with the sensor in the soil" width="250">
+  <img src="docs/phone-soil.png" alt="Level 5: the soil sensor beside the board, its yellow AOUT lead routed around the XIAO into D1's row, with dots carrying the reading along it to the pin" width="250">
   &nbsp;
   <img src="docs/phone-screen.png" alt="Level 3: an OLED screen beside the board on four jumper leads, showing Temperature 27.4 and Humidity 45%, sharing the SDA and SCL wires with the sensor" width="250">
 </p>
@@ -33,7 +33,7 @@
 - **Build your own.** Place wires, resistors and LEDs by tapping two holes. It tells you whether the LED lights, and why not if it doesn't. Your build is kept in this browser.
 - **Fits the screen.** The board lies on its side on a wide screen and stands up on a phone, where the words follow it: the rails are "top and bottom" one way and "left and right" the other.
 - **Zoom.** On a phone each step opens zoomed in on the part that matters. Pinch, drag, or use the + and − buttons; **Whole board** zooms back out.
-- **LED legs are labelled.** The LED leans to one side so both holes stay in sight, with a red + on the long leg and a blue − on the short one. Tap a hole to hear what's plugged into it.
+- **LED legs are labelled.** The LED leans to one side so both holes stay in sight, with a red + on the long leg and a blue − on the short one. Tap a hole to see what's plugged into it.
 - No account and no server. It works offline and installs to a phone's home screen.
 
 ## Running it
