@@ -336,7 +336,15 @@ await page.click('.tab >> nth=0');
 assert.match(await text('#extra pre'), /0 mV {2}-> {2}100% wet/, 'no power reads as soaking wet');
 await go('build');
 
-// Fits a phone: nothing scrolls sideways.
+// Fits a phone: nothing scrolls sideways or runs off the edge on any step, even with the code open.
+const ids = await page.evaluate(async () => (await import('./js/lessons.js')).STEPS.map(s => s.id));
+for (const id of ids) {
+  await go(id);
+  await page.evaluate(() => document.querySelectorAll('details').forEach(d => { d.open = true; }));
+  const over = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, ...[...document.querySelectorAll('.panel, #next, #zin')].map(e => e.getBoundingClientRect().right)) - innerWidth);
+  assert.ok(over <= 0.5, `${id} is ${Math.round(over)}px wider than the phone`);
+}
+await go('build');
 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the page scrolls sideways on a phone');
 
 // Installable.

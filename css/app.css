@@ -375,7 +375,7 @@ svg[data-orient="v"] .smoke { animation-name: smoke-v; }
 
 /* ----- Narrower screens ----- */
 @media (max-width: 900px) {
-  .app { grid-template-columns: 1fr; grid-template-rows: minmax(0, 56fr) minmax(0, 44fr); }
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 56fr) minmax(0, 44fr); }
   .stage { padding: 0 .75rem .25rem; }
   .panel { border-left: 0; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; }
   .panel-scroll { padding: .9rem 1.1rem .4rem; }
