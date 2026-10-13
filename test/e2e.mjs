@@ -111,18 +111,20 @@ const partner = await page.evaluate(async t => {
   const T = hole(t); // the nearest one, so it's on screen when the board is zoomed in
   return netHoles(netOf(t)).filter(h => h.id !== t).sort((p, q) => Math.hypot(p.x - T.x, p.y - T.y) - Math.hypot(q.x - T.x, q.y - T.y))[0].id;
 }, target);
+await tap(target);
+assert.match(await text('#info'), /glowing hole itself/);
+assert.equal(await page.evaluate(() => rowsAndRails.state.quiz.answer), null, 'tapping the glowing hole itself doesn’t use up the round');
 await tap(partner);
 assert.equal(await text('.verdict'), 'Yes, connected.');
 await page.click('button:has-text("Next round")');
-const t2 = await page.evaluate(() => rowsAndRails.state.quiz.target);
-const stranger = await page.evaluate(async t => {
+const stranger = () => page.evaluate(async () => {
   const { HOLES, netOf, hole } = await import('./js/board.js');
-  const T = hole(t);
+  const t = rowsAndRails.state.quiz.target, T = hole(t);
   return HOLES.filter(h => netOf(h.id) !== netOf(t)).sort((p, q) => Math.hypot(p.x - T.x, p.y - T.y) - Math.hypot(q.x - T.x, q.y - T.y))[0].id;
-}, t2);
-await tap(stranger);
+});
+await tap(await stranger());
 assert.equal(await text('.verdict'), 'Not connected.');
-for (let i = 0; i < 4; i++) { await page.click('#extra .btn'); await tap(await page.evaluate(() => rowsAndRails.state.quiz.target)); }
+for (let i = 0; i < 4; i++) { await page.click('#extra .btn'); await tap(await stranger()); }
 await page.click('button:has-text("See your score")');
 assert.match(await text('.verdict'), /^1 of 6 right/);
 

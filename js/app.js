@@ -639,7 +639,6 @@ function quizUI(ex) {
   ex.append(h('p', { class: 'verdict ' + (q.right ? 'good' : 'bad') }, q.right ? 'Yes, connected.' : 'Not connected.'),
     h('p', {}, q.right
       ? `Both are on ${describeNet(t)}. The whole strip is lit up.`
-      : q.answer === q.target ? `That's the glowing hole itself. Pick another hole on the same strip.`
       : `${cap(describeHole(q.answer))} is on ${describeNet(a)}. The glowing hole is on ${describeNet(t)}, lit up in green.`),
     h('button', { class: 'btn', onclick: nextRound }, q.round === 5 ? 'See your score' : 'Next round'));
 }
@@ -657,8 +656,9 @@ function nextRound() {
 function answer(id) {
   const q = state.quiz;
   if (q.answer || q.done) return;
+  if (id === q.target) return info('That’s the glowing hole itself. Pick another hole on the same strip.'); // the round carries on
   q.answer = id;
-  q.right = id !== q.target && netOf(id) === netOf(q.target);
+  q.right = netOf(id) === netOf(q.target);
   if (q.right) q.score++;
   render();
 }
