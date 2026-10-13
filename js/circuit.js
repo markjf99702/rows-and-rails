@@ -45,14 +45,29 @@ export function loops(edges, flip = -1, start = 'bat+', end = 'bat-') {
   const out = [];
   const seen = new Set([start]);
   const path = [];
+  // Can the end still be reached from here without going back over the path so far? Asking before each
+  // step keeps the walk out of dead ends, which in a big tangle of wires could take seconds to try in full.
+  // It finds the same paths in the same order: a step it skips couldn't have led to any.
+  const reaches = from => {
+    if (from === end) return true;
+    const todo = [from], been = new Set([from]);
+    while (todo.length) {
+      for (const step of adj.get(todo.pop()) || []) {
+        if (step.next === end) return true;
+        if (seen.has(step.next) || been.has(step.next)) continue;
+        been.add(step.next); todo.push(step.next);
+      }
+    }
+    return false;
+  };
   (function walk(net) {
-    if (out.length >= MAX_PATHS) return;
     if (net === end) { out.push(path.slice()); return; }
     for (const step of adj.get(net) || []) {
+      if (out.length >= MAX_PATHS) return;
       if (seen.has(step.next)) continue;
-      seen.add(step.next); path.push(step);
-      walk(step.next);
-      path.pop(); seen.delete(step.next);
+      seen.add(step.next);
+      if (reaches(step.next)) { path.push(step); walk(step.next); path.pop(); }
+      seen.delete(step.next);
     }
   })(start);
   return out;

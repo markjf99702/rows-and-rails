@@ -137,3 +137,73 @@ test('soil sensor mistakes', () => {
   assert.equal(soilStatus(L5.filter((_, k) => k !== 2)).items[1].ok, false, 'no ground wire to the rail');
   assert.equal(soilStatus(withLeads({ AOUT: 'j8' })).ok, false, 'D6 can’t measure');
 });
+
+// ----- The loop search -----
+import { loops, edgesOf } from '../js/circuit.js';
+
+// Every simple path, tried in full: the search before it learned to skip dead ends.
+function everyPath(edges, flip = -1, start = 'bat+', end = 'bat-') {
+  const adj = new Map();
+  const add = (n, step) => { if (!adj.has(n)) adj.set(n, []); adj.get(n).push(step); };
+  edges.forEach((e, k) => {
+    if (e.na === e.nb) return;
+    if (e.kind === 'led' ? k !== flip : true) add(e.na, { edge: e, from: e.a, to: e.b, next: e.nb });
+    if (e.kind === 'led' ? k === flip : true) add(e.nb, { edge: e, from: e.b, to: e.a, next: e.na });
+  });
+  const out = [], seen = new Set([start]), path = [];
+  (function walk(net) {
+    if (out.length >= 400) return;
+    if (net === end) { out.push(path.slice()); return; }
+    for (const step of adj.get(net) || []) {
+      if (seen.has(step.next)) continue;
+      seen.add(step.next); path.push(step);
+      walk(step.next);
+      path.pop(); seen.delete(step.next);
+    }
+  })(start);
+  return out;
+}
+
+test('skipping dead ends finds the same loops, in the same order, as trying every path', () => {
+  let seed = 12345;
+  const rand = n => { seed = (seed * 1103515245 + 12345) % 2147483648; return Math.floor(seed / 2147483648 * n); };
+  const near = HOLES.filter(h => h.x < 4); // the first four rows, so the parts join up into tangles
+  const key = paths => JSON.stringify(paths.map(p => p.map(s => [s.edge.part, s.from, s.to])));
+  const same = (parts, label) => {
+    const edges = edgesOf(parts);
+    const nets = [...new Set(edges.flatMap(e => [e.na, e.nb]))];
+    let n = 0;
+    for (const [flip, start, end] of [[-1, 'bat+', 'bat-'], [rand(edges.length), 'bat+', 'bat-'], [-1, nets[rand(nets.length)], nets[rand(nets.length)]]]) {
+      const want = everyPath(edges, flip, start, end);
+      n += want.length;
+      assert.equal(key(loops(edges, flip, start, end)), key(want), label);
+    }
+    return n;
+  };
+  let found = 0;
+  for (let k = 0; k < 400; k++) {
+    const parts = [battery];
+    for (let n = 6 + rand(18); n > 0; n--) parts.push({ type: ['wire', 'resistor', 'led', 'wire'][rand(4)], a: near[rand(near.length)].id, b: near[rand(near.length)].id });
+    found += same(parts, `circuit ${k}`);
+  }
+  assert.ok(found > 3000, `only ${found} loops to compare`);
+  // More loops than it keeps (400): it stops at the same ones.
+  // Eight resistors from + to row 8, eight wires on to row 9, eight resistors from there to −, and a dead end off row 8.
+  const many = [battery];
+  for (let i = 0; i < 8; i++) many.push({ type: 'resistor', a: 'T+8', b: 'a8' }, { type: 'wire', a: 'b8', b: 'b9' }, { type: 'resistor', a: 'c9', b: 'T-10' });
+  many.push({ type: 'wire', a: 'd8', b: 'f8' }, { type: 'wire', a: 'g8', b: 'g9' }, { type: 'resistor', a: 'h9', b: 'h10' }, { type: 'wire', a: 'i10', b: 'i8' });
+  assert.ok(same(many, 'many loops') >= 400);
+});
+
+test('a big tangle of wires that goes nowhere is still quick to check', () => {
+  // Rows 5 to 18 joined down both halves and across the gap twice in every row: 56 parts, fed from + with no way back.
+  const parts = [battery, { type: 'wire', a: 'T+5', b: 'a5' }];
+  for (let r = 5; r <= 18; r++) {
+    if (r < 18) parts.push({ type: 'resistor', a: 'b' + r, b: 'b' + (r + 1) }, { type: 'wire', a: 'g' + r, b: 'g' + (r + 1) });
+    parts.push({ type: 'wire', a: 'c' + r, b: 'h' + r }, { type: 'resistor', a: 'd' + r, b: 'i' + r });
+  }
+  const t0 = performance.now();
+  const r = analyze([...parts, { type: 'led', a: 'c20', b: 'c21' }]);
+  assert.ok(performance.now() - t0 < 300, `took ${Math.round(performance.now() - t0)} ms`);
+  assert.equal(r.leds[0].state + ':' + r.leds[0].why, 'off:open');
+});
