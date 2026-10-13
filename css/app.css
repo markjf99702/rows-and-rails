@@ -399,8 +399,9 @@ svg[data-orient="v"] .smoke { animation-name: smoke-v; }
   .info { font-size: .8rem; }
   .steps .btn { min-width: 4.4rem; padding: .5rem .8rem; }
 }
-/* A phone on its side: the board beside the panel, as on a wide screen, and clear of the notch. */
-@media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
+/* A phone on its side: the board beside the panel, as on a wide screen, and clear of the notch.
+   Not under 600px wide, where a short window (a phone's half of a split screen) would leave the board a sliver. */
+@media (min-width: 600px) and (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
   .app { grid-template-columns: minmax(0, 1fr) 360px; grid-template-rows: none; }
   .stage { padding-left: max(.75rem, env(safe-area-inset-left)); }
   .panel { border-top: 0; border-left: 1px solid var(--line); border-radius: 0; }

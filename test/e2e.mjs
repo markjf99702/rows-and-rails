@@ -426,6 +426,11 @@ await page.waitForTimeout(400);
 assert.ok(await page.evaluate(() => rowsAndRails.view.fullPitch()) >= 8, 'holes too small with the phone on its side');
 assert.ok(await page.evaluate(() => document.querySelector('.panel-scroll').getBoundingClientRect().height) >= 200, 'no room to read with the phone on its side');
 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+// A short window too narrow for both side by side (a phone's half of a split screen) keeps the board across the top.
+await page.setViewportSize({ width: 412, height: 360 });
+await page.waitForTimeout(400);
+assert.ok(await page.evaluate(() => document.querySelector('.board-wrap').getBoundingClientRect().width) > 300, 'the board is squeezed to a sliver in a short, narrow window');
+assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
 
 // Wide screens lay the board on its side.
 await page.setViewportSize({ width: 1280, height: 800 });
