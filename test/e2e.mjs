@@ -398,6 +398,13 @@ assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= i
 const cdp = await ctx.newCDPSession(page);
 assert.deepEqual((await cdp.send('Page.getInstallabilityErrors')).installabilityErrors, []);
 
+// A phone on its side puts the board beside the panel, with holes big enough to tap and room to read.
+await page.setViewportSize({ width: 844, height: 390 });
+await page.waitForTimeout(400);
+assert.ok(await page.evaluate(() => rowsAndRails.view.fullPitch()) >= 8, 'holes too small with the phone on its side');
+assert.ok(await page.evaluate(() => document.querySelector('.panel-scroll').getBoundingClientRect().height) >= 200, 'no room to read with the phone on its side');
+assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+
 // Wide screens lay the board on its side.
 await page.setViewportSize({ width: 1280, height: 800 });
 await page.waitForFunction(() => rowsAndRails.view.orient === 'h');

@@ -397,6 +397,16 @@ svg[data-orient="v"] .smoke { animation-name: smoke-v; }
   .info { font-size: .8rem; }
   .steps .btn { min-width: 4.4rem; padding: .5rem .8rem; }
 }
+/* A phone on its side: the board beside the panel, as on a wide screen, and clear of the notch. */
+@media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
+  .app { grid-template-columns: minmax(0, 1fr) 360px; grid-template-rows: none; }
+  .stage { padding-left: max(.75rem, env(safe-area-inset-left)); }
+  .panel { border-top: 0; border-left: 1px solid var(--line); border-radius: 0; }
+  .panel-scroll { padding-right: max(1.1rem, env(safe-area-inset-right)); }
+  .steps { padding-right: max(1rem, env(safe-area-inset-right)); }
+  .steps .btn { min-width: 4.4rem; padding: .5rem .8rem; }
+  .top .tag { display: none; }
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
   .flow-dots { stroke-dasharray: 0 6; }
