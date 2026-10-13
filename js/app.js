@@ -906,6 +906,17 @@ for (const [t, label] of Object.entries(TOOLS)) {
 }
 document.addEventListener('keydown', e => {
   if (e.target.closest('input, textarea, [contenteditable]') || e.metaKey || e.ctrlKey || e.altKey) return;
+  // On a row of tabs, the arrow keys move along the tabs instead of through the steps.
+  const tab = e.target.closest('[role="tab"]');
+  if (tab) {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    const tabs = [...tab.parentElement.querySelectorAll('[role="tab"]')];
+    const to = tabs[(tabs.indexOf(tab) + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+    to.focus();
+    to.click();
+    return;
+  }
   if (e.key === 'ArrowRight') go(state.step + 1);
   if (e.key === 'ArrowLeft' && state.step > 0) go(state.step - 1);
 });
