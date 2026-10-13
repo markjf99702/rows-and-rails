@@ -338,6 +338,18 @@ assert.deepEqual(await page.evaluate(() => {
   return ts.flatMap((p, i) => ts.slice(i + 1).filter(q => q.t.getAttribute('y') === p.t.getAttribute('y') && p.b.x < q.b.x + q.b.width && q.b.x < p.b.x + p.b.width)
     .map(q => `${p.t.textContent} / ${q.t.textContent}`));
 }), [], 'labels print on top of each other');
+// In the dark palette the black sensor in the drawings keeps an edge you can see.
+await page.emulateMedia({ colorScheme: 'dark' });
+const edge = await page.evaluate(() => {
+  const lum = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const rgb = s => (s.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+  const stroke = getComputedStyle(document.querySelector('#body .art .a-pcb')).stroke;
+  if (!stroke.startsWith('rgb')) return 0;
+  const [a, b] = [lum(rgb(stroke)), lum(rgb(getComputedStyle(document.querySelector('.panel')).backgroundColor))].sort((x, y) => y - x);
+  return (a + 0.05) / (b + 0.05);
+});
+await page.emulateMedia({ colorScheme: 'light' });
+assert.ok(edge >= 3, `the soil sensor's edge is only ${edge.toFixed(2)}:1 on the dark panel`);
 await go('soil-aout');
 await page.waitForTimeout(400);
 assert.equal(await page.locator('.signal-dots').count(), 1, 'the voltage travels down AOUT');

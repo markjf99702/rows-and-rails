@@ -297,7 +297,7 @@ const logLine = mv => `${mv} mV  ->  ${percentOf(mv)}% wet`;
 function probeScene(where) {
   const wet = state.wet;
   const mix = (a, b) => '#' + [0, 2, 4].map(i => Math.round(parseInt(a.slice(1 + i, 3 + i), 16) * (1 - wet) + parseInt(b.slice(1 + i, 3 + i), 16) * wet).toString(16).padStart(2, '0')).join('');
-  const probe = (y, h) => `<rect x="112" y="${y}" width="22" height="${h}" rx="3" fill="#1d1f22"/><rect x="108" y="${y}" width="30" height="26" rx="3" fill="#2a2c31"/>
+  const probe = (y, h) => `<rect x="112" y="${y}" width="22" height="${h}" rx="3" fill="#1d1f22" class="a-pcb"/><rect x="108" y="${y}" width="30" height="26" rx="3" fill="#2a2c31" class="a-pcb"/>
     <path d="M110 ${y + 30}h26" stroke="#f2f2ee" stroke-width="2" stroke-dasharray="4 2"/><path d="M118 ${y}v-18M123 ${y}v-18M128 ${y}v-18" stroke-width="2.4" stroke="#999" fill="none"/>`;
   if (where === 'air') return `<svg class="art scene" viewBox="0 0 246 150" role="img" aria-label="The sensor held up in the air">${probe(22, 108)}<text x="190" y="80" class="a-text">open air</text></svg>`;
   if (where === 'water') return `<svg class="art scene" viewBox="0 0 246 150" role="img" aria-label="The sensor in a glass of water up to the white line">

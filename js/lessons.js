@@ -699,9 +699,9 @@ void loop() {
 }`;
 
 const probeArt = `<svg class="art" viewBox="0 0 300 118" role="img" aria-label="The sensor from the side. At the left, the three-pin connector and the electronics, with the TLC555 chip and the 662K regulator. A white line marks where the blade starts. The blade, on the right, is the part that goes into the soil.">
-  <rect x="104" y="40" width="182" height="40" rx="4" fill="#1d1f22"/>
   <path d="M276 40l12 20-12 20z" fill="#1d1f22"/>
-  <rect x="18" y="36" width="90" height="48" rx="5" fill="#2a2c31"/>
+  <rect x="104" y="40" width="182" height="40" rx="4" fill="#1d1f22" class="a-pcb"/>
+  <rect x="18" y="36" width="90" height="48" rx="5" fill="#2a2c31" class="a-pcb"/>
   <rect x="6" y="48" width="14" height="24" rx="2" fill="#f1eee6" stroke="#b9b2a2"/>
   <rect x="34" y="46" width="26" height="16" rx="2" fill="#0f1012" stroke="#555a60"/>
   <rect x="70" y="48" width="18" height="11" rx="2" fill="#0f1012" stroke="#555a60"/>
