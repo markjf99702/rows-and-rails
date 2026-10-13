@@ -871,6 +871,7 @@ function go(i, push = true) {
   state.tab = 0;
   state.sb.pending = null;
   state.ch.pending = null;
+  state.ch3.pending = null;
   if (step().mode === 'quiz') newQuiz();
   if (step().mode === 'pin') state.high = true;
   if (step().mode === 'join') { clearTimeout(joining); state.wifi = 'off'; }

@@ -251,6 +251,9 @@ for (let i = 0; i < await tabs3.count(); i++) {
 
 await go('final');
 await page.click('[data-tool="wire"]');
+await tap('a4');
+await go('blank'); await go('final');
+assert.equal(await page.locator('.mark-pending').count(), 0, 'a half-placed wire doesn’t outlast leaving the step');
 for (const [a, b] of [['a4', 'T+4'], ['a3', 'T-3'], ['f17', 'T+17'], ['f18', 'T-18'], ['g19', 'j7'], ['f20', 'i6'], ['e22', 'f19'], ['e23', 'g20']]) { await tap(a); await tap(b); }
 await page.click('[data-tool="resistor"]'); await tap('b5'); await tap('b10');
 await page.click('[data-tool="led"]'); await tap('d10'); await tap('d11');
