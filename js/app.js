@@ -516,7 +516,8 @@ function runUI(ex) {
   const ok = sensorOK();
   const slider = h('input', { type: 'range', id: 'temp', min: '15', max: '35', step: '0.1', value: String(state.temp), 'aria-label': 'Temperature' });
   const readout = h('span', { class: 'temp' }, `${state.temp.toFixed(1)} °C`);
-  slider.addEventListener('input', () => { state.temp = +slider.value; clearInterval(breath); readout.textContent = `${state.temp.toFixed(1)} °C`; draw(); refreshScreen(); checkAlert(); refreshPhone(); });
+  // Taking the slider ends a breath, and its damp air with it.
+  slider.addEventListener('input', () => { state.temp = +slider.value; clearInterval(breath); state.hum = 45; readout.textContent = `${state.temp.toFixed(1)} °C`; draw(); refreshScreen(); checkAlert(); refreshPhone(); });
   if (level() === 4) ex.append(phone(step().phone));
   ex.append(
     h('label', { class: 'slider', for: 'temp' }, h('span', {}, 'Temperature'), readout),

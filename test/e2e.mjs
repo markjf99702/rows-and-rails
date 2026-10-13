@@ -257,6 +257,11 @@ await page.evaluate(() => { const s = document.querySelector('#temp'); s.value =
 assert.notEqual(await page.getAttribute('#oled', 'src'), before, 'the screen shows the new reading');
 assert.equal(await page.locator('.part-led.led-lit').count(), 1);
 assert.match(await page.getAttribute('.oled-pixels', 'href'), /^data:image\/png/, 'and so does the screen on the board');
+await page.click('button:has-text("Breathe on it")');
+await page.waitForFunction(() => rowsAndRails.state.hum > 45);
+await page.evaluate(() => { const s = document.querySelector('#temp'); s.value = '24'; s.dispatchEvent(new Event('input')); });
+await page.waitForTimeout(300);
+assert.equal(await page.evaluate(() => rowsAndRails.state.hum), 45, 'taking the slider mid-breath ends the damp air too');
 
 await go('blank');
 const tabs3 = page.locator('.tab');
