@@ -613,6 +613,7 @@ function challengeUI(ex, r) {
 }
 
 function ledHint(l) {
+  if (l.state === 'lit') return `It lights, but from ${l.by.join(' and ')}, so it’s always on. Start the resistor in D10’s row, row 5.`;
   return {
     'same-strip': 'Both LED legs are on the same clip. Move one to another row.',
     backwards: 'The LED is in backwards: the long leg (+) goes on the resistor’s side.',

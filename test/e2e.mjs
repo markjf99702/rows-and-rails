@@ -213,6 +213,14 @@ assert.match(await text('#extra'), /All wired/);
 await page.reload();
 await page.evaluate(() => document.fonts.ready);
 assert.match(await text('#extra'), /All wired/, 'the challenge is saved');
+// An LED fed from the + rail instead of D10 lights, and the list says so.
+await page.click('button:has-text("Start again")');
+await page.click('[data-tool="wire"]'); await tap('a4'); await tap('T+4'); await tap('a3'); await tap('T-3');
+await page.click('[data-tool="resistor"]'); await tap('T+10'); await tap('a10');
+await page.click('[data-tool="led"]'); await tap('c10'); await tap('c11');
+await page.click('[data-tool="wire"]'); await tap('a11'); await tap('T-12');
+assert.equal(await page.locator('.part-led.led-lit').count(), 1);
+assert.match(await text('.checklist'), /It lights, but from 3V3/);
 
 // ----- Level 3: a screen on the same two wires -----
 await go('challenge');
