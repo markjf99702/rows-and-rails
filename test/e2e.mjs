@@ -102,6 +102,17 @@ for (let i = 0; i < await tabs.count(); i++) {
   await page.click('button:has-text("Show the fix")');
   assert.equal(await text('.verdict'), 'It lights.', 'fix ' + i);
 }
+// With the keyboard, what you pressed keeps the focus when the panel is drawn again.
+const focused = () => page.evaluate(() => document.activeElement.textContent);
+await page.locator('.tab').first().focus();
+await page.keyboard.press('Enter');
+assert.equal(await focused(), 'Backwards LED', 'a tab keeps the focus');
+await page.locator('button:has-text("Show the fix")').focus();
+await page.keyboard.press('Enter');
+assert.equal(await focused(), 'Show the mistake again', 'so does the button under it');
+await page.locator('#dots button').nth(2).focus();
+await page.keyboard.press('Enter');
+assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-current')), 'step', 'and a step dot');
 
 // The quiz: one right answer, one wrong one.
 await go('quiz');

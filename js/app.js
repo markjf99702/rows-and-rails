@@ -134,9 +134,11 @@ function render() {
   $('#body').innerHTML = sided(s.body);
   $('#back').disabled = state.step === 0;
   $('#next').textContent = state.step === STEPS.length - 1 ? 'Restart' : level(state.step + 1) !== level() ? `Level ${level(state.step + 1)}` : 'Next';
+  const onDot = $('#dots').contains(document.activeElement);
   $('#dots').replaceChildren(...steps.map(i => h('li', {}, h('button', {
     title: STEPS[i].title, 'aria-label': `Step ${steps.indexOf(i) + 1}: ${STEPS[i].title}`, 'aria-current': i === state.step ? 'step' : 'false', onclick: () => go(i),
   }))));
+  if (onDot) $('#dots [aria-current="step"]').focus(); // the dot you pressed, drawn again
   $('#tools').hidden = s.mode !== 'sandbox' && s.mode !== 'challenge';
   [...$('#tools').querySelectorAll('button')].forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === box().tool)));
   const copy = $('#body .copy');
@@ -146,8 +148,14 @@ function render() {
   setInfo();
 }
 
+let extraFor = -1; // the step the panel's buttons were last made for
 function renderExtra(r) {
   const s = step(), ex = $('#extra');
+  // Everything in here is made again each time, including a button just pressed with the keyboard.
+  // Put the keyboard back on it afterwards, when the same buttons come back.
+  const controls = () => [...ex.querySelectorAll('button, input')];
+  const before = extraFor === state.step ? controls() : [], at = before.indexOf(document.activeElement);
+  extraFor = state.step;
   ex.replaceChildren();
   if (s.mode === 'mistakes') mistakesUI(ex, r);
   else if (s.mode === 'quiz') quizUI(ex);
@@ -164,6 +172,8 @@ function renderExtra(r) {
     ex.append(h('p', { class: 'progress' }, ...[1, 2, 3, 4].map(n => h('span', { class: n <= s.build ? 'on' : '' }, ''))),
       h('p', { class: 'verdict ' + (done ? 'good' : '') }, done ? 'It lights.' : `Part ${s.build} of 4`));
   }
+  const after = controls();
+  if (at >= 0 && after.length === before.length) after[at].focus();
 }
 
 function h(tag, attrs = {}, ...kids) {
