@@ -1,7 +1,7 @@
 {
   "name": "Rows and Rails",
   "short_name": "Rows and Rails",
-  "description": "How a breadboard is wired inside, and your first LED circuit.",
+  "description": "How a breadboard is wired inside, from a first LED to a XIAO weather station.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
