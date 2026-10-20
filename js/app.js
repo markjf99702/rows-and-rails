@@ -9,6 +9,7 @@ const view = new BoardView(svg);
 const KEY = 'rows-and-rails.v1';
 const KEY2 = 'rows-and-rails.xiao.v1';
 const KEY3 = 'rows-and-rails.screen.v1';
+const STEP_KEY = 'rows-and-rails.step'; // the step you were on, for opening the app again without a step in its address
 
 const state = {
   step: 0,
@@ -886,7 +887,9 @@ function go(i, push = true) {
   if (step().mode === 'quiz') newQuiz();
   if (step().mode === 'pin') state.high = true;
   if (step().mode === 'join') { clearTimeout(joining); state.wifi = 'off'; }
-  if (push) history.replaceState(null, '', '#' + step().id);
+  // A new entry for each step, so the browser's or phone's Back button steps back through them.
+  if (push && location.hash !== '#' + step().id) history.pushState(null, '', '#' + step().id);
+  try { localStorage.setItem(STEP_KEY, step().id); } catch {}
   view.setExtent(level() >= 3 ? EXTENT3 : EXTENT);
   if (fitBoard()) applyFocus(false);
   render();
@@ -942,8 +945,12 @@ new ResizeObserver(() => {
 
 {
   fitBoard();
-  const i = STEPS.findIndex(s => '#' + s.id === location.hash);
+  // A link to a step opens that step. With no step in the address (the home screen icon), carry on where you left off.
+  let opened = location.hash;
+  try { opened ||= '#' + localStorage.getItem(STEP_KEY); } catch {}
+  const i = STEPS.findIndex(s => '#' + s.id === opened);
   go(i >= 0 ? i : 0, false);
+  history.replaceState(null, '', '#' + step().id); // so Back from the next step comes back to this one
 }
 
 // For the tests and screenshot tools: where a hole is on screen.

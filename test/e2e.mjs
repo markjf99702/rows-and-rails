@@ -93,6 +93,25 @@ assert.equal(await page.locator('.flow-dots').count(), 1);
 await page.click('#back');
 assert.equal(await page.locator('.part-led.led-off').count(), 1, 'before the last wire it is dark');
 
+// The browser's or phone's Back button steps back through the lesson, and opening it again with no step in the
+// address (from the home screen) carries on where you left off.
+const titled = (t, why) => page.waitForFunction(t => document.querySelector('#title').textContent === t, t, { timeout: 3000 })
+  .catch(async () => assert.equal(await text('#title'), t, why));
+await go('rows');
+await page.click('#next');
+await page.click('#next');
+await titled('The power rails');
+await page.goBack();
+await titled('The gap in the middle', 'Back goes to the step before');
+await page.goBack();
+await titled('Rows of five', 'and the one before that');
+await page.goForward();
+await titled('The gap in the middle', 'Forward comes back');
+await page.goto(base);
+await page.evaluate(() => document.fonts.ready);
+assert.equal(await text('#title'), 'The gap in the middle', 'opens at the step you left off on');
+assert.equal(new URL(page.url()).hash, '#gap');
+
 // Every mistake leaves the LED dark (or burns it), and every fix lights it.
 await go('mistakes');
 const tabs = page.locator('.tab');

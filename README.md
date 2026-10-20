@@ -34,6 +34,7 @@
 - **Fits the screen.** The board lies on its side on a wide screen and stands up on a phone, where the words follow it: the rails are "top and bottom" one way and "left and right" the other.
 - **Zoom.** On a phone each step opens zoomed in on the part that matters. Pinch, drag, or use the + and − buttons; **Whole board** zooms back out.
 - **LED legs are labelled.** The LED leans to one side so both holes stay in sight, with a red + on the long leg and a blue − on the short one. Tap a hole to see what's plugged into it.
+- **Picks up where you left off.** The browser's or phone's Back button steps back through the lesson, and opening it again takes you to the step you were on.
 - No account and no server. It works offline and installs to a phone's home screen.
 
 ## Running it
