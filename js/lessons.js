@@ -1,7 +1,7 @@
 // The walk-through: what the board shows at each step and what the panel says.
 
 // focus: the part of the board a step zooms to on a small screen, as [x0, y0, x1, y1] in board coordinates.
-const NEAR_BATTERY = [-1.6, -4.9, 16, 9.2];
+const NEAR_BATTERY = [-1.6, -4.9, 16, 12.6];
 
 const battery = { type: 'battery' };
 const resistor = { type: 'resistor', a: 'T+12', b: 'a12' };

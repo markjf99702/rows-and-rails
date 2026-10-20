@@ -40,6 +40,14 @@ const tap = async id => {
 };
 const go = async id => { await page.evaluate(id => { location.hash = id; }, id); await page.waitForFunction(id => location.hash === '#' + id, id); };
 const text = sel => page.locator(sel).innerText();
+// The words on the board that run past the edges of its box.
+const offBoard = sel => page.evaluate(sel => {
+  const b = document.querySelector('#board').getBoundingClientRect();
+  return [...document.querySelectorAll(sel)].filter(t => {
+    const r = t.getBoundingClientRect();
+    return r.left < b.left || r.right > b.right || r.top < b.top || r.bottom > b.bottom;
+  }).map(t => t.textContent);
+}, sel);
 
 // First step, and tapping a hole shows what it's joined to.
 assert.equal(await text('#title'), 'Meet the breadboard');
@@ -91,9 +99,11 @@ await go('meet');
 await page.waitForTimeout(500);
 assert.equal(await page.evaluate(() => rowsAndRails.view.zoomed()), false, 'the first step shows the whole board');
 
-// Tapping a hole with an LED leg in it says which leg.
+// The note in the middle gap shows whole on a phone.
 await go('led');
 await page.waitForTimeout(500);
+assert.deepEqual(await offBoard('.note'), [], 'the note runs off the edge of the board');
+// Tapping a hole with an LED leg in it says which leg.
 await tap('c12');
 assert.match(await text('#info'), /long leg \(\+\)/);
 await go('meet');
@@ -380,13 +390,7 @@ assert.match(await text('#kicker'), /Level 5 · Step 1 of 6/i);
 assert.equal(await page.locator('.part-soil').count(), 1);
 // On the upright board the blade runs off the edge of the view, but its labels stay in sight.
 await page.waitForFunction(() => !rowsAndRails.view.busy);
-assert.deepEqual(await page.evaluate(() => {
-  const b = document.querySelector('#board').getBoundingClientRect();
-  return [...document.querySelectorAll('.soil-note')].filter(t => {
-    const r = t.getBoundingClientRect();
-    return r.left < b.left || r.right > b.right || r.top < b.top || r.bottom > b.bottom;
-  }).map(t => t.textContent);
-}), [], 'the soil sensor’s labels run off the edge of the board');
+assert.deepEqual(await offBoard('.soil-note'), [], 'the soil sensor’s labels run off the edge of the board');
 // The diagram of the sensor: no two labels on the same line run into each other.
 assert.deepEqual(await page.evaluate(() => {
   const ts = [...document.querySelectorAll('#body svg.art text')].map(t => ({ t, b: t.getBBox() }));
