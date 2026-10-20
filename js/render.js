@@ -218,6 +218,42 @@ export class BoardView {
     this.gFlow = el('g', { class: 'bb-flow' }, svg);
     this.gMarks = el('g', { class: 'bb-marks' }, svg);
     this.gHover = el('g', { class: 'bb-hover' }, svg);
+    this.gCursor = el('g', { class: 'bb-cursor' }, svg);
+    this.setCursor(this.cursor);
+  }
+
+  // The ring the arrow keys move from hole to hole, or null for none. It has a layer of its own,
+  // so moving it doesn't redraw the board.
+  setCursor(id) {
+    this.cursor = id;
+    if (!this.gCursor) return;
+    this.gCursor.replaceChildren();
+    if (!id) return;
+    const h = hole(id), [a, b] = this.pt(h.x, h.y);
+    el('circle', { cx: a, cy: b, r: P * 0.78, class: 'cursor-edge' }, this.gCursor);
+    el('circle', { cx: a, cy: b, r: P * 0.78, class: 'cursor-ring' }, this.gCursor);
+  }
+
+  // Slide the view just far enough to bring a hole into sight, when it's zoomed in, and clear of
+  // anything covering the bottom of the board (the zoom buttons): below, in screen pixels.
+  reveal(id, below = 0) {
+    const now = this.target || this.vb;
+    if (!now) return;
+    const h = hole(id), [x, y] = this.pt(h.x, h.y), m = P * 1.2, mb = m + below * now.w / this.box().w;
+    const to = { ...now };
+    if (x - m < to.x) to.x = x - m; else if (x + m > to.x + to.w) to.x = x + m - to.w;
+    if (y - m < to.y) to.y = y - m; else if (y + mb > to.y + to.h) to.y = y + mb - to.h;
+    const fit = this.clamp(to);
+    if (fit.x !== now.x || fit.y !== now.y) this.show(fit, true);
+  }
+
+  // The hole nearest the middle of what's showing.
+  middleHole() {
+    const r = this.target || this.vb;
+    if (!r) return HOLES[0].id;
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    const [x, y] = this.orient === 'h' ? [cx / P, cy / P] : [cy / P, -cx / P];
+    return holeNear(x, y, Infinity).id;
   }
 
   // scene: { parts, highlights: [{ net, tone }], notes: [{ at: [x, y], text }], marks: [{ hole, kind }], flow, xray }

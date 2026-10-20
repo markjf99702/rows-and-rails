@@ -69,6 +69,20 @@ export function holeNear(x, y, reach = 0.75) {
   return best;
 }
 
+// The next hole from one hole in a direction along the board (dx, dy: one of them 1 or −1, the other 0), for moving
+// around with the arrow keys: the nearest hole ahead, keeping to the same line where there is one. null at the edge.
+export function holeToward(id, dx, dy) {
+  const from = hole(id);
+  let best = null, bestScore = Infinity;
+  for (const h of HOLES) {
+    const along = (h.x - from.x) * dx + (h.y - from.y) * dy;
+    if (along <= 0) continue;
+    const score = along + 3 * Math.abs((h.x - from.x) * dy - (h.y - from.y) * dx);
+    if (score < bestScore) { best = h; bestScore = score; }
+  }
+  return best?.id ?? null;
+}
+
 // The rails are at the top and bottom when the board lies on its side, and on the right and left
 // when it stands up on a phone (turned a quarter clockwise, so the top rails end up on the right). Everything that names them asks here.
 let SIDES = { T: 'top', B: 'bottom' };

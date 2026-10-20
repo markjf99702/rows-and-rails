@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { analyze, flowPoints } from '../js/circuit.js';
-import { connected, netHoles, holeNear, HOLES } from '../js/board.js';
+import { connected, netHoles, holeNear, holeToward, HOLES } from '../js/board.js';
 
 const battery = { type: 'battery' };
 const good = [
@@ -23,6 +23,24 @@ test('the board has the right number of holes and strips', () => {
   assert.ok(!connected('T+2', 'B+2'), 'top and bottom rails are separate');
   assert.equal(holeNear(11.2, 4.9).id, 'c12');
   assert.equal(holeNear(11.5, 8.5), null, 'nothing in the gap');
+});
+
+test('the arrow keys step from hole to hole', () => {
+  assert.equal(holeToward('c12', 1, 0), 'c13', 'along the row numbers');
+  assert.equal(holeToward('c12', 0, 1), 'd12', 'across, a to j');
+  assert.equal(holeToward('e12', 0, 1), 'f12', 'over the middle gap');
+  assert.equal(holeToward('a12', 0, -1), 'T-12', 'out onto the rails');
+  assert.equal(holeToward('T-6', 1, 0), 'T-8', 'along a rail, over the skipped hole between groups of five');
+  assert.equal(holeToward('a7', 0, -1), 'T-6', 'to the nearest rail hole where none lines up');
+  assert.equal(holeToward('B+17', 0, -1), 'B-17');
+  assert.equal(holeToward('a30', 1, 0), null, 'nothing past the end');
+  assert.equal(holeToward('T+2', 0, -1), null, 'or past the edge');
+  // From any hole, every way that has holes leads to one, and back again comes home on the main rows.
+  for (const h of HOLES) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const to = holeToward(h.id, dx, dy);
+    if (HOLES.some(q => (q.x - h.x) * dx + (q.y - h.y) * dy > 0)) assert.ok(to, `${h.id} stuck going ${dx},${dy}`);
+    if (h.kind === 'main' && to && dx) assert.equal(holeToward(to, -dx, -dy), h.id, `${h.id} and back`);
+  }
 });
 
 test('the lesson circuit lights', () => {

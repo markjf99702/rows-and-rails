@@ -57,6 +57,7 @@ assert.match(await text('#info'), /c12 is joined to a12, b12, d12, e12/);
 assert.equal(await page.locator('.hl .ring').count(), 5);
 await tap('T-8');
 assert.match(await text('#info'), /all 25 holes on the right − rail/);
+assert.notEqual(await page.evaluate(() => document.activeElement.id), 'board', 'a tap leaves the arrow keys to the steps');
 
 // Every colour used for words reads at 4.5:1 or better, in both palettes: on the panel, the grey on the page
 // around the board too, and the words on the orange buttons.
@@ -223,6 +224,45 @@ await page.click('[data-tool="remove"]'); await tap('c12');
 await page.click('[data-tool="led"]'); await tap('c13'); await tap('c12');
 await page.click('button:has-text("Turn it around")');
 assert.equal(await page.locator('.part-led.led-lit').count(), 1);
+
+// The board works from the keyboard too. Tab reaches it, the arrow keys move a ring from hole to hole, the line
+// above the board names each one (a screen reader reads it out), and Enter or Space taps it.
+const focusBoard = async () => {
+  await page.focus('#xray');
+  await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'board', 'Tab reaches the board');
+};
+await go('quiz');
+await focusBoard();
+const glowing = await page.evaluate(() => rowsAndRails.state.quiz.target);
+assert.equal(await text('#info'), `${glowing}. It’s the glowing hole.`, 'the ring starts on the glowing hole');
+assert.equal(await page.locator('.bb-cursor circle').count(), 2, 'and shows');
+// Standing up, a to e run right to left on the screen: one hole toward the middle gap is on the same clip.
+await page.keyboard.press('abcd'.includes(glowing[0]) ? 'ArrowLeft' : 'ArrowRight');
+await page.keyboard.press('Enter');
+assert.equal(await page.evaluate(() => rowsAndRails.state.quiz.right), true, 'Enter answers with the hole under the ring');
+assert.match(await text('#info'), /^Yes, connected\. Both are on row \d+/, 'and the line above the board says so');
+await go('rows');
+await focusBoard();
+const from = await page.evaluate(() => rowsAndRails.state.cursor);
+await page.keyboard.press('ArrowDown');
+const down = await page.evaluate(async from => (await import('./js/board.js')).holeToward(from, 1, 0), from);
+assert.equal(await text('#info'), `${down}.`, 'down the upright board is along the rows');
+await page.keyboard.press(' ');
+assert.match(await text('#info'), new RegExp(`^${down} is joined to`), 'Space taps it');
+await go('build');
+await page.click('button:has-text("Clear the board")');
+await page.focus('[data-tool="led"]');
+await page.keyboard.press('Enter');
+await page.keyboard.press('Tab');
+await page.keyboard.press('Tab');
+assert.equal(await page.evaluate(() => document.activeElement.id), 'board', 'the board comes after the parts');
+await page.keyboard.press('Enter');
+await page.keyboard.press('ArrowDown');
+await page.keyboard.press(' ');
+assert.equal(await page.locator('.part-led').count(), 1, 'an LED placed from the keyboard');
+await page.keyboard.press('Tab');
+assert.equal(await page.locator('.bb-cursor circle').count(), 0, 'the ring goes when the keyboard leaves the board');
 
 // ----- Level 2: the XIAO and the sensor -----
 await go('build');

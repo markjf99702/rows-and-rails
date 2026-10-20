@@ -369,12 +369,17 @@ svg[data-orient="v"] .smoke { animation-name: smoke-v; }
 .mark-pending .dot { fill: var(--hl-sel); }
 @keyframes spin { to { transform: rotate(360deg); } }
 .hover-ring { fill: none; stroke: var(--hl-sel); stroke-width: 1; opacity: .8; pointer-events: none; }
+/* the keyboard's ring: orange on a dark edge, so it shows on the white plastic and on the dark parts alike */
+.cursor-edge { fill: none; stroke: #23211d; stroke-width: 3.4; }
+.cursor-ring { fill: none; stroke: var(--hl-sel); stroke-width: 1.7; }
+#board:focus { outline: none; }
+#board:focus-visible { outline: 3px solid var(--hl-sel); outline-offset: -3px; }
 
 .note rect { fill: #23211d; fill-opacity: .86; }
 #board .note text { fill: #fff; font: 700 5.4px 'Figtree', sans-serif; letter-spacing: .02em; }
 .note { animation: fade .5s .15s both; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
-.bb-marks, .bb-flow, .bb-hover, .bb-hl { pointer-events: none; }
+.bb-marks, .bb-flow, .bb-hover, .bb-hl, .bb-cursor { pointer-events: none; }
 
 /* ----- Narrower screens ----- */
 @media (max-width: 900px) {

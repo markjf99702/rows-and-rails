@@ -1,4 +1,4 @@
-import { HOLES, hole, netOf, netHoles, describeNet, describeHole, cap, setSides, sided, partHoles, whatsIn, EXTENT } from './board.js';
+import { HOLES, hole, netOf, netHoles, describeNet, describeHole, cap, setSides, sided, partHoles, whatsIn, EXTENT, holeToward } from './board.js';
 import { sensorStatus, screenStatus, soilStatus, analyze } from './circuit.js';
 import { BoardView, WIRE_CYCLE } from './render.js';
 import { STEPS, MISTAKES, LED_CIRCUIT, MISTAKES2, XIAO_CIRCUIT, xiao, bme, HOT, MISTAKES3, SCREEN_CIRCUIT, oled, EXTENT3, TROUBLE, antenna, IP, MISTAKES5, SOIL_CIRCUIT, THIRSTY, SOIL_MV } from './lessons.js';
@@ -15,6 +15,7 @@ const state = {
   step: 0,
   xray: null,      // the reader's own choice for this step, or null for the step's default
   inspect: null,   // hole id tapped in look mode
+  cursor: null,    // hole id the keyboard's ring is on
   tab: 0, fixed: false,
   quiz: null,
   sb: { parts: load(), tool: 'look', pending: null },
@@ -661,12 +662,17 @@ function quizUI(ex) {
     ex.append(h('p', { class: 'verdict' }, `Round ${q.round + 1}: ${describeHole(q.target)} is glowing.`));
     return;
   }
-  const t = netOf(q.target), a = netOf(q.answer);
-  ex.append(h('p', { class: 'verdict ' + (q.right ? 'good' : 'bad') }, q.right ? 'Yes, connected.' : 'Not connected.'),
-    h('p', {}, q.right
-      ? `Both are on ${describeNet(t)}. The whole strip is lit up.`
-      : `${cap(describeHole(q.answer))} is on ${describeNet(a)}. The glowing hole is on ${describeNet(t)}, lit up in green.`),
+  const [say, why] = quizSays(q);
+  ex.append(h('p', { class: 'verdict ' + (q.right ? 'good' : 'bad') }, say), h('p', {}, why),
     h('button', { class: 'btn', onclick: nextRound }, q.round === 5 ? 'See your score' : 'Next round'));
+}
+
+// Whether a round's answer was right, and why.
+function quizSays(q) {
+  const t = netOf(q.target), a = netOf(q.answer);
+  return q.right
+    ? ['Yes, connected.', `Both are on ${describeNet(t)}. The whole strip is lit up.`]
+    : ['Not connected.', `${cap(describeHole(q.answer))} is on ${describeNet(a)}. The glowing hole is on ${describeNet(t)}, lit up in green.`];
 }
 
 function nextRound() {
@@ -843,15 +849,68 @@ svg.addEventListener('wheel', e => { e.preventDefault(); view.zoomAt(Math.exp(-e
 
 function tap(e) {
   const hh = view.holeAt(e, 0.8);
-  const m = step().mode;
   if (!hh) {
     if (state.inspect) { state.inspect = null; draw(); setInfo(); }
     return;
   }
-  if (m === 'quiz') answer(hh.id);
-  else if (m === 'sandbox' || m === 'challenge') sandboxTap(hh.id);
-  else inspect(hh.id);
+  if (keys) { state.cursor = hh.id; view.setCursor(hh.id); } // the keyboard's ring follows a tap
+  tapHole(hh.id);
 }
+
+function tapHole(id) {
+  const m = step().mode;
+  if (m === 'quiz') answer(id);
+  else if (m === 'sandbox' || m === 'challenge') sandboxTap(id);
+  else inspect(id);
+}
+
+// ----- The board from the keyboard -----
+// Tab to the board and the arrow keys move a ring from hole to hole. The line above the board names each hole,
+// and a screen reader reads it out (it's a live region). Enter or Space taps the hole, just like a finger.
+
+let keys = false; // the ring is showing: the board has the keyboard
+
+// Where the ring starts: the hole that matters on this step, or the one in the middle of the view.
+function startHole() {
+  if (state.inspect) return state.inspect;
+  if (box().pending) return box().pending;
+  if (step().mode === 'quiz' && !state.quiz.done) return state.quiz.target;
+  return view.middleHole();
+}
+
+function moveCursor(id) {
+  state.cursor = id;
+  view.setCursor(id);
+  view.reveal(id, $('.zoom').offsetHeight + 8);
+  const glowing = step().mode === 'quiz' && !state.quiz.done && id === state.quiz.target;
+  info((hole(id).kind === 'rail' ? cap(describeHole(id)) : id) + '.' + legIn(id) + (glowing ? ' It’s the glowing hole.' : ''));
+}
+
+function showCursor() { keys = true; moveCursor(state.cursor || startHole()); }
+
+const ARROWS = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] };
+function boardKey(e) {
+  const arrow = ARROWS[e.key], press = e.key === 'Enter' || e.key === ' ';
+  if (!arrow && !press) return false;
+  e.preventDefault();
+  if (!keys) { showCursor(); return true; } // the first key shows where the ring is
+  if (arrow) {
+    // Standing up, the board is turned a quarter clockwise: right on screen is toward the top rails, down is along the rows.
+    const [dx, dy] = view.orient === 'h' ? arrow : [arrow[1], -arrow[0]];
+    moveCursor(holeToward(state.cursor, dx, dy) || state.cursor);
+  } else {
+    const q = state.quiz, answered = q?.answer;
+    tapHole(state.cursor);
+    // The panel says whether the answer was right. Say it here too, where a screen reader hears it.
+    if (step().mode === 'quiz' && q.answer && !answered) info(quizSays(q).join(' '));
+  }
+  return true;
+}
+
+svg.addEventListener('focus', () => { if (svg.matches(':focus-visible')) showCursor(); });
+svg.addEventListener('blur', () => { keys = false; view.setCursor(null); });
+// A click or a tap doesn't take the keyboard, so the arrow keys still go through the steps afterwards.
+svg.addEventListener('mousedown', e => e.preventDefault());
 
 // ----- Zoom -----
 
@@ -880,6 +939,7 @@ function go(i, push = true) {
   state.step = (i + STEPS.length) % STEPS.length;
   state.xray = null;
   state.inspect = null;
+  state.cursor = null;
   state.fixed = false;
   state.tab = 0;
   state.sb.pending = null;
@@ -896,6 +956,7 @@ function go(i, push = true) {
   render();
   applyFocus();
   $('.panel-scroll').scrollTop = 0;
+  if (keys) moveCursor(startHole()); // still on the board (the browser's Back, say): start again on this step
 }
 
 $('#back').addEventListener('click', () => go(state.step - 1));
@@ -911,6 +972,7 @@ for (const [t, label] of Object.entries(TOOLS)) {
 }
 document.addEventListener('keydown', e => {
   if (e.target.closest('input, textarea, [contenteditable]') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target === svg && boardKey(e)) return; // on the board, the arrow keys move from hole to hole
   // On a row of tabs, the arrow keys move along the tabs instead of through the steps.
   const tab = e.target.closest('[role="tab"]');
   if (tab) {
