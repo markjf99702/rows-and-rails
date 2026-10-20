@@ -6,20 +6,20 @@
   --bg: #e6e1d5;
   --panel: #f7f5f0;
   --ink: #23211d;
-  --muted: #6b665c;
+  --muted: #676259;
   --line: #d3cdbf;
-  --accent: #b8541d;
+  --accent: #b4521c;
   --accent-ink: #fff;
   --chip: #ece8de;
-  --good: #1f8a52;
+  --good: #1c7e4b;
   --bad: #c2362f;
-  --warn: #b7791f;
-  --sda: #1f7fc4;
-  --scl: #a77d00;
+  --warn: #976419;
+  --sda: #1c73b2;
+  --scl: #8c6800;
   --code-bg: #23211d;
   --code-ink: #e9e6df;
-  --plus: #d8343a;
-  --minus: #2f6fd6;
+  --plus: #cf3137;
+  --minus: #2e6cd1;
   --pcb-edge: none; /* the black soil sensor in the panel's drawings needs an edge only on a dark panel */
   /* the board stays white plastic in both palettes, like the real thing */
   --plastic: #f6f4ee;

@@ -50,6 +50,23 @@ assert.equal(await page.locator('.hl .ring').count(), 5);
 await tap('T-8');
 assert.match(await text('#info'), /all 25 holes on the right − rail/);
 
+// Every colour used for words reads at 4.5:1 or better, in both palettes: on the panel, the grey on the page
+// around the board too, and the words on the orange buttons.
+for (const colorScheme of ['light', 'dark']) {
+  await page.emulateMedia({ colorScheme });
+  assert.deepEqual(await page.evaluate(() => {
+    const probe = document.body.appendChild(document.createElement('i'));
+    const rgb = name => { probe.style.color = `var(--${name})`; return getComputedStyle(probe).color.match(/[\d.]+/g).slice(0, 3).map(Number); };
+    const lum = c => c.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
+    const ratio = (a, b) => { const [x, y] = [lum(rgb(a)), lum(rgb(b))].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+    const pairs = [...['ink', 'muted', 'accent', 'good', 'bad', 'warn', 'sda', 'scl', 'plus', 'minus'].map(n => [n, 'panel']), ['muted', 'bg'], ['accent-ink', 'accent']];
+    const faint = pairs.filter(([a, b]) => ratio(a, b) < 4.5).map(([a, b]) => `--${a} on --${b}: ${ratio(a, b).toFixed(2)}:1`);
+    probe.remove();
+    return faint;
+  }), [], `words too faint in the ${colorScheme} palette`);
+}
+await page.emulateMedia({ colorScheme: 'light' });
+
 // Standing up on a phone (a quarter-turn clockwise), the top rails are on the right.
 await go('rails');
 assert.match(await text('#body'), /The right pair and the left pair aren't joined/);
