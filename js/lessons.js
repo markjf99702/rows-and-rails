@@ -388,7 +388,7 @@ STEPS.push(
     parts: [...XIAO_CIRCUIT, oled],
     highlights: [{ net: '22ae', tone: 'scl' }, { net: '23ae', tone: 'sda' }],
     body: `<p>This is a <b>0.96 inch OLED</b>: 128 by 64 tiny lights that glow on their own, run by an SSD1306 chip. It talks I²C too, so it needs the same four connections as the sensor.</p>
-      <p>It's wider than the board, so it sits above it on four <b>female-to-male jumper wires</b>. <b class="minus">GND</b> and <b class="plus">VCC</b> go straight into the rails. <b class="scl">SCL</b> and <b class="sda">SDA</b> go into two empty rows, 22 and 23.</p>
+      <p>Pushed into the board it would cover about ten rows of holes, so it sits above it on four <b>female-to-male jumper wires</b>. <b class="minus">GND</b> and <b class="plus">VCC</b> go straight into the rails. <b class="scl">SCL</b> and <b class="sda">SDA</b> go into two empty rows, 22 and 23.</p>
       <p class="hint">Look at the pin order: the screen goes GND, VCC, SCL, SDA, and the sensor goes VIN, GND, SCL, SDA. Always follow the labels, not where a pin sits.</p>`,
   },
   {

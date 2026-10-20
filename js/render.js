@@ -476,7 +476,7 @@ export class BoardView {
     }
   }
 
-  // A 0.96 inch OLED: too wide for a half-size board, so it sits above it on four jumper leads.
+  // A 0.96 inch OLED: pushed into the board it would cover about ten rows of holes, so it sits above it on four jumper leads.
   // shows: a data: URL of what's on the screen right now, or nothing for a dark screen.
   drawOled(p, g, shows) {
     const x0 = OLED_X + 1.5; // the middle of its four pins
