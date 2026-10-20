@@ -332,10 +332,13 @@ assert.equal(await page.locator('.part-antenna').count(), 1);
 await page.click('#next');
 assert.equal(await text('#title'), 'Join your Wi-Fi');
 assert.equal(await page.locator('.wave').count(), 0, 'no radio waves before joining');
+assert.equal(await page.locator('.part-led.led-lit').count(), 0, 'the LED stays dark while the XIAO is off');
 await page.click('button:has-text("Connect")');
 assert.match(await text('#extra .verdict'), /Joining/);
+assert.equal(await page.locator('.part-led.led-lit').count(), 0, 'and while it joins: the sketch hasn’t set D10 yet');
 await page.waitForFunction(() => document.querySelector('#extra .verdict')?.textContent.includes('192.168.1.42'), null, { timeout: 4000 });
 assert.equal(await page.locator('.wave').count(), 3, 'radio waves once it’s on Wi-Fi');
+assert.equal(await page.locator('.part-led.led-lit').count(), 1, 'and the sketch is running');
 
 await go('page');
 assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('.route rect.d-box')].flatMap(r => {
@@ -358,11 +361,14 @@ assert.equal(await page.locator('#alerts .note-card').count(), 2, 'it cooled off
 
 await go('nowifi');
 const tabs4 = page.locator('.tab');
+const stuck = await page.evaluate(async () => (await import('./js/lessons.js')).TROUBLE.map(t => t.wifi === 'joining'));
 for (let i = 0; i < await tabs4.count(); i++) {
   await tabs4.nth(i).click();
   assert.equal(await page.locator('#extra .verdict.bad').count(), 1, 'symptom ' + i);
+  assert.equal(await page.locator('.part-led.led-lit').count(), stuck[i] ? 0 : 1, 'the LED is dark while it’s stuck joining ' + i);
   await page.click('button:has-text("Show the fix")');
   assert.equal(await page.locator('#pp-t').count(), 1, 'the page opens after the fix ' + i);
+  assert.equal(await page.locator('.part-led.led-lit').count(), 1, 'and the sketch runs ' + i);
 }
 
 

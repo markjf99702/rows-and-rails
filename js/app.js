@@ -80,6 +80,7 @@ function scene() {
     const t = s.mode === 'trouble' && !state.fixed ? TROUBLE[state.tab] : null;
     sc.wifi = t ? t.wifi : s.mode === 'join' ? state.wifi : s.mode === 'wifi' ? undefined : 'on';
     sc.waves = sc.wifi === 'on';
+    if (sc.wifi === 'off' || sc.wifi === 'joining') sc.high = false; // the sketch only sets D10 once it's on Wi-Fi
     if (t?.noAntenna) sc.parts = sc.parts.filter(p => p !== antenna);
     if (s.mode === 'trouble') sc.parts = t?.noAntenna ? SCREEN_CIRCUIT : [...SCREEN_CIRCUIT, antenna];
   }
