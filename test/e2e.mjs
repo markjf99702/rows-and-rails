@@ -227,6 +227,9 @@ assert.equal(await page.locator('.part-led.led-lit').count(), 1);
 
 // The board works from the keyboard too. Tab reaches it, the arrow keys move a ring from hole to hole, the line
 // above the board names each one (a screen reader reads it out), and Enter or Space taps it.
+// Chromium lets Tab reach an SVG that has focus listeners even without a tabindex, but Safari and Firefox don't,
+// so check the board asks for it.
+assert.equal(await page.getAttribute('#board', 'tabindex'), '0', 'the board can take the keyboard in every browser');
 const focusBoard = async () => {
   await page.focus('#xray');
   await page.keyboard.press('Tab');
