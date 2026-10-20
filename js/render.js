@@ -534,10 +534,12 @@ export class BoardView {
     // the blade, off toward the plant pot, with the line you shouldn't push it past
     this.rect(x0 - 4.4, -16, x0 + 4.4, -9.2, { class: 'soil-blade' }, g);
     this.line(x0 - 4.4, -10.3, x0 + 4.4, -10.3, { class: 'soil-line' }, g);
-    // Two lines of text across the blade, stacked whichever way the board is turned.
-    const [l1, l2] = this.orient === 'h' ? [[x0, -11.3], [x0, -12.5]] : [[x0 - 0.8, -12.4], [x0 + 0.8, -12.4]];
-    this.text(...l1, 'blade: into the soil', { class: 'soil-note' }, g);
-    this.text(...l2, (this.orient === 'h' ? '↑' : '→') + ' to the plant pot', { class: 'soil-note' }, g);
+    // Two lines of text: across the blade when the board lies on its side. Standing up, the blade runs off the
+    // edge of the view and the words with it, so they go just below the blade instead.
+    const [l1, l2] = this.orient === 'h' ? [[x0, -11.3], [x0, -12.5]] : [[x0 + 5.3, -11.3], [x0 + 6.3, -11.3]];
+    const cls = 'soil-note' + (this.orient === 'h' ? '' : ' off-blade');
+    this.text(...l1, 'blade: into the soil', { class: cls }, g);
+    this.text(...l2, (this.orient === 'h' ? '↑' : '→') + ' to the plant pot', { class: cls }, g);
     // the electronics
     this.rect(x0 - 4.4, -9.4, x0 + 4.4, -2.1, { rx: P * 0.3, class: 'soil-pcb' }, g);
     this.rect(x0 - 3.4, -8.3, x0 - 0.6, -6.6, { rx: P * 0.08, class: 'soil-chip' }, g);

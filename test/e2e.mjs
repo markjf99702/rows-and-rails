@@ -355,6 +355,15 @@ assert.equal(await text('#next'), 'Level 5');
 await page.click('#next');
 assert.match(await text('#kicker'), /Level 5 · Step 1 of 6/i);
 assert.equal(await page.locator('.part-soil').count(), 1);
+// On the upright board the blade runs off the edge of the view, but its labels stay in sight.
+await page.waitForFunction(() => !rowsAndRails.view.busy);
+assert.deepEqual(await page.evaluate(() => {
+  const b = document.querySelector('#board').getBoundingClientRect();
+  return [...document.querySelectorAll('.soil-note')].filter(t => {
+    const r = t.getBoundingClientRect();
+    return r.left < b.left || r.right > b.right || r.top < b.top || r.bottom > b.bottom;
+  }).map(t => t.textContent);
+}), [], 'the soil sensor’s labels run off the edge of the board');
 // The diagram of the sensor: no two labels on the same line run into each other.
 assert.deepEqual(await page.evaluate(() => {
   const ts = [...document.querySelectorAll('#body svg.art text')].map(t => ({ t, b: t.getBBox() }));

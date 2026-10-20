@@ -334,6 +334,7 @@ svg[data-orient="v"] .smoke { animation-name: smoke-v; }
 .soil-blade { fill: #1d1f22; stroke: #0d0e10; stroke-width: .6; }
 .soil-line { stroke: #f2f2ee; stroke-width: .9; stroke-dasharray: 2 1.2; }
 #board .soil-note { fill: #cfd3d8; font: 600 3.4px 'Figtree', sans-serif; }
+#board .soil-note.off-blade { fill: var(--muted); }
 .soil-pcb { fill: #222428; stroke: #0d0e10; stroke-width: .6; }
 .soil-chip { fill: #0f1012; stroke: #555a60; stroke-width: .4; }
 #board .soil-part { fill: #b7bcc2; font-size: 2.4px; }
